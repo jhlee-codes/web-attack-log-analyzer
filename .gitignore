@@ -1,0 +1,9 @@
+result/*
+!result/.gitkeep
+
+# Environment
+.env
+
+# OS
+.DS_Store
+Thumbs.db
