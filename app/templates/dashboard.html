@@ -638,6 +638,40 @@
                         <div class="empty">탐지 결과가 없습니다.</div>
                     {% endif %}
                 </section>
+
+                {% if dashboard.csv_preview.error or dashboard.csv_preview.rows %}
+                    <section style="margin-top: 16px;">
+                        <div class="section-head">
+                            <h2>CSV Preview</h2>
+                            <span class="badge">{{ dashboard.csv_preview.rows|length }}</span>
+                        </div>
+
+                        {% if dashboard.csv_preview.error %}
+                            <div class="empty">{{ dashboard.csv_preview.error }}</div>
+                        {% else %}
+                            <div class="table-wrap">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            {% for header in dashboard.csv_preview.headers %}
+                                                <th>{{ header }}</th>
+                                            {% endfor %}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for row in dashboard.csv_preview.rows %}
+                                            <tr>
+                                                {% for header in dashboard.csv_preview.headers %}
+                                                    <td class="mono">{{ row[header] }}</td>
+                                                {% endfor %}
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% endif %}
+                    </section>
+                {% endif %}
             </div>
 
             <div>

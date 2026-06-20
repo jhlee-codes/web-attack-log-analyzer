@@ -4,6 +4,7 @@ from collections import Counter
 from datetime import datetime
 from tempfile import TemporaryDirectory
 from urllib.parse import urlencode
+import csv
 import json
 import logging
 import re
@@ -89,6 +90,49 @@ def build_report_downloads(report_file: Path | None) -> list[dict]:
         for label, candidate in candidates
         if candidate.exists()
     ]
+
+
+def get_findings_csv_file(report_file: Path | None) -> Path | None:
+    if report_file is None:
+        return None
+
+    timestamp = report_file.stem.removeprefix("web_attack_detection_report_")
+    return RESULT_DIR / f"web_attack_detection_findings_{timestamp}.csv"
+
+
+def build_csv_preview(report_file: Path | None, limit: int = 20) -> dict:
+    csv_file = get_findings_csv_file(report_file)
+
+    if csv_file is None or not csv_file.exists():
+        return {
+            "filename": "",
+            "headers": [],
+            "rows": [],
+            "error": "",
+        }
+
+    try:
+        with csv_file.open("r", encoding="utf-8", newline="") as file:
+            reader = csv.DictReader(file)
+            headers = reader.fieldnames or []
+            rows = [
+                {header: row.get(header, "") for header in headers}
+                for _, row in zip(range(limit), reader)
+            ]
+    except (OSError, csv.Error) as error:
+        return {
+            "filename": csv_file.name,
+            "headers": [],
+            "rows": [],
+            "error": f"CSV 미리보기를 읽을 수 없습니다: {error}",
+        }
+
+    return {
+        "filename": csv_file.name,
+        "headers": headers,
+        "rows": rows,
+        "error": "",
+    }
 
 
 def build_report_history() -> list[dict]:
@@ -373,6 +417,7 @@ def build_empty_dashboard_data(
         "share_path": build_dashboard_share_path(filters, report_file),
         "timeline": [],
         "recent_findings": [],
+        "csv_preview": build_csv_preview(report_file),
         "error": error,
     }
 
@@ -430,6 +475,7 @@ def load_dashboard_data(filters: dict | None = None, report_name: str = ""):
         "share_path": build_dashboard_share_path(filters, report_file),
         "timeline": timeline,
         "recent_findings": findings[-20:][::-1],
+        "csv_preview": build_csv_preview(report_file),
         "error": "",
     }
 

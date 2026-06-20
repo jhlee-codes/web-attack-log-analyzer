@@ -386,6 +386,53 @@ def test_dashboard_renders_report_download_links(tmp_path, monkeypatch):
     assert "/reports/web_attack_detection_findings_20260620_160000.csv" in body
 
 
+def test_dashboard_renders_csv_preview(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "RESULT_DIR", tmp_path)
+    monkeypatch.setattr(app_module.access_logger, "info", lambda message: None)
+    report_file = tmp_path / "web_attack_detection_report_20260620_160000.json"
+    csv_file = tmp_path / "web_attack_detection_findings_20260620_160000.csv"
+    report_file.write_text(
+        json.dumps(
+            {
+                "analysis_info": {
+                    "analysis_time": "2026-06-20 16:00:00",
+                },
+                "summary": {
+                    "total_requests": 2,
+                    "total_login_events": 0,
+                    "total_findings": 2,
+                    "suspicious_ip_count": 2,
+                    "risk_counts": {"HIGH": 1, "MEDIUM": 1, "LOW": 0},
+                },
+                "statistics": {
+                    "suspicious_ips": ["10.0.0.1", "10.0.0.2"],
+                    "request_count_by_ip": {"10.0.0.1": 1, "10.0.0.2": 1},
+                },
+                "timeline": [],
+                "findings": [],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    csv_file.write_text(
+        "rule_id,severity,attack_type,ip\n"
+        "SQLI-001,HIGH,SQL Injection,10.0.0.1\n"
+        "XSS-001,MEDIUM,XSS,10.0.0.2\n",
+        encoding="utf-8",
+    )
+
+    client = app_module.app.test_client()
+    response = client.get("/dashboard")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "CSV Preview" in body
+    assert "rule_id" in body
+    assert "SQLI-001" in body
+    assert "XSS-001" in body
+
+
 def test_report_download_route_serves_allowed_report_file(tmp_path, monkeypatch):
     monkeypatch.setattr(app_module, "RESULT_DIR", tmp_path)
     monkeypatch.setattr(app_module.access_logger, "info", lambda message: None)
