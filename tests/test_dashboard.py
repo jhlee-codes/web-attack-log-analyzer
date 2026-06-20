@@ -41,6 +41,26 @@ def test_dashboard_renders_latest_json_report(tmp_path, monkeypatch):
                     "suspicious_ips": ["10.0.0.1", "10.0.0.2"],
                     "request_count_by_ip": {"10.0.0.1": 10, "10.0.0.2": 4},
                 },
+                "timeline": [
+                    {
+                        "timestamp": "2026-06-20 16:00:00",
+                        "rule_id": "SQLI-001",
+                        "severity": "HIGH",
+                        "attack_type": "SQL Injection",
+                        "ip": "10.0.0.1",
+                        "path": "/login",
+                        "evidence": "matched_pattern=' or",
+                    },
+                    {
+                        "timestamp": "2026-06-20 16:00:01",
+                        "rule_id": "SCAN-002",
+                        "severity": "MEDIUM",
+                        "attack_type": "Repeated 404",
+                        "ip": "10.0.0.2",
+                        "path": "-",
+                        "evidence": "status_404_count=5, threshold=5",
+                    },
+                ],
                 "findings": [
                     {
                         "rule_id": "SQLI-001",
@@ -77,6 +97,8 @@ def test_dashboard_renders_latest_json_report(tmp_path, monkeypatch):
     assert "10.0.0.1" in body
     assert "요청 IP Top 5" in body
     assert "Repeated 404" in body
+    assert "Timeline" in body
+    assert "2026-06-20 16:00:00" in body
 
 
 def test_dashboard_filters_findings_by_query_parameters(tmp_path, monkeypatch):
@@ -100,6 +122,26 @@ def test_dashboard_filters_findings_by_query_parameters(tmp_path, monkeypatch):
                     "suspicious_ips": ["10.0.0.1", "10.0.0.2"],
                     "request_count_by_ip": {"10.0.0.1": 10, "10.0.0.2": 4},
                 },
+                "timeline": [
+                    {
+                        "timestamp": "2026-06-20 16:00:00",
+                        "rule_id": "SQLI-001",
+                        "severity": "HIGH",
+                        "attack_type": "SQL Injection",
+                        "ip": "10.0.0.1",
+                        "path": "/login",
+                        "evidence": "matched_pattern=' or",
+                    },
+                    {
+                        "timestamp": "2026-06-20 16:00:01",
+                        "rule_id": "SCAN-002",
+                        "severity": "MEDIUM",
+                        "attack_type": "Repeated 404",
+                        "ip": "10.0.0.2",
+                        "path": "-",
+                        "evidence": "status_404_count=5, threshold=5",
+                    },
+                ],
                 "findings": [
                     {
                         "rule_id": "SQLI-001",
@@ -133,4 +175,6 @@ def test_dashboard_filters_findings_by_query_parameters(tmp_path, monkeypatch):
     assert response.status_code == 200
     assert "SQLI-001" in body
     assert "SCAN-002" not in body
+    assert "2026-06-20 16:00:00" in body
+    assert "2026-06-20 16:00:01" not in body
     assert '<option value="HIGH" selected>HIGH</option>' in body

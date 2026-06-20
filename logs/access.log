@@ -33,3 +33,6 @@
 2026-06-20 14:43:32 HTTP_REQUEST ip=127.0.0.1 method=POST path="/login" query="" status=200 user_agent="Mozilla/5.0"
 2026-06-20 14:43:32 HTTP_REQUEST ip=127.0.0.1 method=POST path="/login" query="" status=200 user_agent="Mozilla/5.0"
 2026-06-20 14:43:33 HTTP_REQUEST ip=127.0.0.1 method=POST path="/login" query="" status=200 user_agent="Mozilla/5.0"
+2026-06-20 16:26:30 HTTP_REQUEST ip=127.0.0.1 method=GET path="/dashboard" query="severity=MEDIUM&attack_type=Path+Traversal&ip=" status=200 user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36"
+2026-06-20 16:26:36 HTTP_REQUEST ip=127.0.0.1 method=GET path="/dashboard" query="severity=&attack_type=&ip=" status=200 user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36"
+2026-06-20 16:26:41 HTTP_REQUEST ip=127.0.0.1 method=GET path="/dashboard" query="severity=&attack_type=Admin+Page+Access&ip=" status=200 user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36"

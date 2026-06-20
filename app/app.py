@@ -64,6 +64,19 @@ def finding_matches_dashboard_filters(finding: dict, filters: dict) -> bool:
     return True
 
 
+def timeline_matches_dashboard_filters(item: dict, filters: dict) -> bool:
+    if filters["severity"] and item.get("severity") != filters["severity"]:
+        return False
+
+    if filters["attack_type"] and item.get("attack_type") != filters["attack_type"]:
+        return False
+
+    if filters["ip"] and item.get("ip") != filters["ip"]:
+        return False
+
+    return True
+
+
 def build_dashboard_summary(base_summary: dict, findings: list[dict]) -> dict:
     risk_counts = {
         "HIGH": 0,
@@ -119,6 +132,7 @@ def load_dashboard_data(filters: dict | None = None):
             "top_request_ips": [],
             "filter_options": {"severities": [], "attack_types": [], "ips": []},
             "filters": filters,
+            "timeline": [],
             "recent_findings": [],
         }
 
@@ -136,6 +150,11 @@ def load_dashboard_data(filters: dict | None = None):
     summary = build_dashboard_summary(payload.get("summary", {}), findings)
     risk_counts = summary.get("risk_counts", {"HIGH": 0, "MEDIUM": 0, "LOW": 0})
     request_count_by_ip = Counter(item.get("ip") for item in findings if item.get("ip") and item.get("ip") != "-")
+    timeline = [
+        item
+        for item in payload.get("timeline", [])
+        if timeline_matches_dashboard_filters(item, filters)
+    ]
 
     return {
         "report_file": report_file,
@@ -148,6 +167,7 @@ def load_dashboard_data(filters: dict | None = None):
         "top_request_ips": build_count_chart(request_count_by_ip, limit=5),
         "filter_options": build_filter_options(all_findings),
         "filters": filters,
+        "timeline": timeline,
         "recent_findings": findings[-20:][::-1],
     }
 

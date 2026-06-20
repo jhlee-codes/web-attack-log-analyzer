@@ -417,47 +417,91 @@
         </div>
 
         <div class="split">
-            <section>
-                <div class="section-head">
-                    <h2>최근 탐지 결과</h2>
-                    <span class="badge">{{ dashboard.recent_findings|length }}</span>
-                </div>
-
-                {% if dashboard.recent_findings %}
-                    <div class="table-wrap">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Severity</th>
-                                    <th>Rule</th>
-                                    <th>Type</th>
-                                    <th>IP</th>
-                                    <th>Path</th>
-                                    <th>Evidence</th>
-                                    <th>Response</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for finding in dashboard.recent_findings %}
-                                    <tr>
-                                        <td>
-                                            <span class="badge {{ finding.severity|lower }}">{{ finding.severity }}</span>
-                                        </td>
-                                        <td class="mono">{{ finding.rule_id }}</td>
-                                        <td>{{ finding.attack_type }}</td>
-                                        <td class="mono">{{ finding.ip }}</td>
-                                        <td class="mono">{{ finding.path }}</td>
-                                        <td class="mono">{{ finding.evidence }}</td>
-                                        <td>{{ finding.response }}</td>
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+            <div>
+                <section>
+                    <div class="section-head">
+                        <h2>Timeline</h2>
+                        <span class="badge">{{ dashboard.timeline|length }}</span>
                     </div>
-                {% else %}
-                    <div class="empty">탐지 결과가 없습니다.</div>
-                {% endif %}
-            </section>
+
+                    {% if dashboard.timeline %}
+                        <div class="table-wrap">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Time</th>
+                                        <th>Severity</th>
+                                        <th>Rule</th>
+                                        <th>Type</th>
+                                        <th>IP</th>
+                                        <th>Path</th>
+                                        <th>Evidence</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in dashboard.timeline %}
+                                        <tr>
+                                            <td class="mono">{{ item.timestamp }}</td>
+                                            <td>
+                                                <span class="badge {{ item.severity|lower }}">{{ item.severity }}</span>
+                                            </td>
+                                            <td class="mono">{{ item.rule_id }}</td>
+                                            <td>{{ item.attack_type }}</td>
+                                            <td class="mono">{{ item.ip }}</td>
+                                            <td class="mono">{{ item.path }}</td>
+                                            <td class="mono">{{ item.evidence }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="empty">타임라인 이벤트가 없습니다.</div>
+                    {% endif %}
+                </section>
+
+                <section style="margin-top: 16px;">
+                    <div class="section-head">
+                        <h2>최근 탐지 결과</h2>
+                        <span class="badge">{{ dashboard.recent_findings|length }}</span>
+                    </div>
+
+                    {% if dashboard.recent_findings %}
+                        <div class="table-wrap">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Severity</th>
+                                        <th>Rule</th>
+                                        <th>Type</th>
+                                        <th>IP</th>
+                                        <th>Path</th>
+                                        <th>Evidence</th>
+                                        <th>Response</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for finding in dashboard.recent_findings %}
+                                        <tr>
+                                            <td>
+                                                <span class="badge {{ finding.severity|lower }}">{{ finding.severity }}</span>
+                                            </td>
+                                            <td class="mono">{{ finding.rule_id }}</td>
+                                            <td>{{ finding.attack_type }}</td>
+                                            <td class="mono">{{ finding.ip }}</td>
+                                            <td class="mono">{{ finding.path }}</td>
+                                            <td class="mono">{{ finding.evidence }}</td>
+                                            <td>{{ finding.response }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="empty">탐지 결과가 없습니다.</div>
+                    {% endif %}
+                </section>
+            </div>
 
             <div>
                 <section>
