@@ -1,6 +1,12 @@
 result/*
 !result/.gitkeep
 
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
 # Environment
 .env
 

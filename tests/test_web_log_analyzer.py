@@ -1,0 +1,116 @@
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+ANALYZER_SCRIPT = PROJECT_ROOT / "analyzer" / "web_log_analyzer.py"
+
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from analyzer import web_log_analyzer
+
+
+def write_lines(path: Path, lines: list[str]):
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def test_analyze_access_log_detects_attack_rule_ids(tmp_path):
+    access_log = tmp_path / "access.log"
+    write_lines(
+        access_log,
+        [
+            '2026-06-20 10:00:00 HTTP_REQUEST ip=10.0.0.1 method=GET path="/login" query="id=1%27%20OR%20%271%27%3D%271" status=200 user_agent="Mozilla/5.0"',
+            '2026-06-20 10:00:01 HTTP_REQUEST ip=10.0.0.2 method=GET path="/search" query="q=%3Cscript%3Ealert(1)%3C%2Fscript%3E" status=404 user_agent="Mozilla/5.0"',
+            '2026-06-20 10:00:02 HTTP_REQUEST ip=10.0.0.3 method=GET path="/download" query="file=..%2F..%2Fetc%2Fpasswd" status=404 user_agent="Mozilla/5.0"',
+        ],
+    )
+
+    result = web_log_analyzer.analyze_access_log(access_log, threshold=5)
+    rule_ids = {finding["rule_id"] for finding in result["findings"]}
+
+    assert {"SQLI-001", "XSS-001", "PATH-001"}.issubset(rule_ids)
+
+
+def test_analyze_login_log_detects_repeated_failures_and_success(tmp_path):
+    login_log = tmp_path / "login.log"
+    write_lines(
+        login_log,
+        [
+            '2026-06-20 10:00:00 LOGIN_FAIL ip=10.0.0.10 id=admin user_agent="Mozilla/5.0"',
+            '2026-06-20 10:00:01 LOGIN_FAIL ip=10.0.0.10 id=admin user_agent="Mozilla/5.0"',
+            '2026-06-20 10:00:02 LOGIN_FAIL ip=10.0.0.10 id=admin user_agent="Mozilla/5.0"',
+            '2026-06-20 10:00:03 LOGIN_SUCCESS ip=10.0.0.10 id=admin user_agent="Mozilla/5.0"',
+        ],
+    )
+
+    result = web_log_analyzer.analyze_login_log(login_log, threshold=3)
+    rule_ids = {finding["rule_id"] for finding in result["findings"]}
+
+    assert "AUTH-001" in rule_ids
+    assert "AUTH-002" in rule_ids
+
+
+def test_cli_format_json_creates_only_json_report(tmp_path):
+    access_log = tmp_path / "access.log"
+    login_log = tmp_path / "login.log"
+    output_dir = tmp_path / "result"
+    write_lines(
+        access_log,
+        [
+            '2026-06-20 10:00:00 HTTP_REQUEST ip=10.0.0.1 method=GET path="/login" query="id=1%27%20OR%20%271%27%3D%271" status=200 user_agent="Mozilla/5.0"',
+        ],
+    )
+    write_lines(login_log, [])
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(ANALYZER_SCRIPT),
+            "--access-log",
+            str(access_log),
+            "--login-log",
+            str(login_log),
+            "--threshold",
+            "5",
+            "--format",
+            "json",
+            "--output-dir",
+            str(output_dir),
+        ],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0
+
+    output_files = list(output_dir.iterdir())
+    assert len(output_files) == 1
+    assert output_files[0].suffix == ".json"
+
+    payload = json.loads(output_files[0].read_text(encoding="utf-8"))
+    assert payload["summary"]["total_findings"] == 1
+    assert payload["findings"][0]["rule_id"] == "SQLI-001"
+
+
+def test_cli_rejects_invalid_format(tmp_path):
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(ANALYZER_SCRIPT),
+            "--format",
+            "xml",
+            "--output-dir",
+            str(tmp_path / "result"),
+        ],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode != 0
+    assert "지원하지 않는 format" in completed.stderr
