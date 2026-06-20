@@ -6,12 +6,13 @@ app = Flask(__name__)
 
 # 로그 저장 경로 설정
 BASE_DIR = Path(__file__).resolve().parent
-LOG_DIR = BASE_DIR / "logs"
+PROJECT_ROOT = BASE_DIR.parent
+
+LOG_DIR = PROJECT_ROOT / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 
 LOGIN_LOG_FILE = LOG_DIR / "login.log"
 ACCESS_LOG_FILE = LOG_DIR / "access.log"
-
 
 def setup_logger(logger_name, log_file):
     logger = logging.getLogger(logger_name)

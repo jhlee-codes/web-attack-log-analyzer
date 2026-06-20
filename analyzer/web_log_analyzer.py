@@ -8,8 +8,8 @@ from pathlib import Path
 from urllib.parse import unquote_plus
 
 
-DEFAULT_ACCESS_LOG = Path("app/logs/access.log")
-DEFAULT_LOGIN_LOG = Path("app/logs/login.log")
+DEFAULT_ACCESS_LOG = Path("logs/access.log")
+DEFAULT_LOGIN_LOG = Path("logs/login.log")
 DEFAULT_THRESHOLD = 5
 RESULT_DIR = Path("result")
 
