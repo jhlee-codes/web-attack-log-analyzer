@@ -100,6 +100,31 @@ def get_findings_csv_file(report_file: Path | None) -> Path | None:
     return RESULT_DIR / f"web_attack_detection_findings_{timestamp}.csv"
 
 
+def get_related_report_files(report_file: Path) -> list[Path]:
+    timestamp = report_file.stem.removeprefix("web_attack_detection_report_")
+
+    return [
+        RESULT_DIR / f"web_attack_detection_report_{timestamp}.json",
+        RESULT_DIR / f"web_attack_detection_report_{timestamp}.md",
+        RESULT_DIR / f"web_attack_detection_result_{timestamp}.txt",
+        RESULT_DIR / f"web_attack_detection_findings_{timestamp}.csv",
+    ]
+
+
+def delete_report_bundle(filename: str):
+    if not REPORT_FILE_PATTERN.fullmatch(filename):
+        abort(404)
+
+    report_file = RESULT_DIR / filename
+
+    if not report_file.is_file() or not filename.startswith("web_attack_detection_report_") or not filename.endswith(".json"):
+        abort(404)
+
+    for related_file in get_related_report_files(report_file):
+        if related_file.exists():
+            related_file.unlink()
+
+
 def build_csv_preview(report_file: Path | None, limit: int = 20) -> dict:
     csv_file = get_findings_csv_file(report_file)
 
@@ -602,6 +627,12 @@ def rules():
 @app.route("/reports")
 def reports():
     return render_template("reports.html", reports=build_report_history())
+
+
+@app.route("/reports/delete", methods=["POST"])
+def delete_report():
+    delete_report_bundle(request.form.get("filename", "").strip())
+    return redirect(url_for("reports"))
 
 
 @app.route("/upload", methods=["GET", "POST"])

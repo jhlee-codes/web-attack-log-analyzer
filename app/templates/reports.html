@@ -139,6 +139,23 @@
             gap: 8px;
         }
 
+        .delete-form {
+            display: inline;
+        }
+
+        .link-button {
+            border: 0;
+            background: transparent;
+            color: var(--high);
+            cursor: pointer;
+            font: inherit;
+            padding: 0;
+        }
+
+        .link-button:hover {
+            text-decoration: underline;
+        }
+
         a {
             color: var(--accent);
             text-decoration: none;
@@ -213,6 +230,10 @@
                                             {% for download in report.downloads %}
                                                 <a href="{{ download.url }}">{{ download.label }}</a>
                                             {% endfor %}
+                                            <form class="delete-form" method="POST" action="/reports/delete">
+                                                <input type="hidden" name="filename" value="{{ report.filename }}">
+                                                <button class="link-button" type="submit">삭제</button>
+                                            </form>
                                         </div>
                                     </td>
                                     <td>

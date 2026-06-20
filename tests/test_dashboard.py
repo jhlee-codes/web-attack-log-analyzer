@@ -134,6 +134,39 @@ def test_reports_page_marks_invalid_json_report(tmp_path, monkeypatch):
     assert "JSON 리포트를 읽을 수 없습니다" in body
 
 
+def test_reports_page_can_delete_report_bundle(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "RESULT_DIR", tmp_path)
+    monkeypatch.setattr(app_module.access_logger, "info", lambda message: None)
+    json_file = tmp_path / "web_attack_detection_report_20260620_160000.json"
+    markdown_file = tmp_path / "web_attack_detection_report_20260620_160000.md"
+    txt_file = tmp_path / "web_attack_detection_result_20260620_160000.txt"
+    csv_file = tmp_path / "web_attack_detection_findings_20260620_160000.csv"
+    json_file.write_text("{}", encoding="utf-8")
+    markdown_file.write_text("# report", encoding="utf-8")
+    txt_file.write_text("report", encoding="utf-8")
+    csv_file.write_text("rule_id,severity\n", encoding="utf-8")
+
+    client = app_module.app.test_client()
+    response = client.post("/reports/delete", data={"filename": json_file.name})
+
+    assert response.status_code == 302
+    assert response.headers["Location"] == "/reports"
+    assert not json_file.exists()
+    assert not markdown_file.exists()
+    assert not txt_file.exists()
+    assert not csv_file.exists()
+
+
+def test_reports_delete_rejects_unexpected_filename(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "RESULT_DIR", tmp_path)
+    monkeypatch.setattr(app_module.access_logger, "info", lambda message: None)
+
+    client = app_module.app.test_client()
+    response = client.post("/reports/delete", data={"filename": "../app.py"})
+
+    assert response.status_code == 404
+
+
 def test_rules_page_renders_detection_rules(tmp_path, monkeypatch):
     rules_file = tmp_path / "rules.json"
     rules_file.write_text(
