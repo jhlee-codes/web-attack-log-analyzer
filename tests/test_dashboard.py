@@ -206,6 +206,22 @@ def test_dashboard_can_select_report_file(tmp_path, monkeypatch):
     assert "XSS-001" not in body
 
 
+def test_dashboard_handles_invalid_json_report(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "RESULT_DIR", tmp_path)
+    monkeypatch.setattr(app_module.access_logger, "info", lambda message: None)
+    report_file = tmp_path / "web_attack_detection_report_20260620_160000.json"
+    report_file.write_text("{invalid json", encoding="utf-8")
+
+    client = app_module.app.test_client()
+    response = client.get("/dashboard")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "JSON 리포트를 읽을 수 없습니다" in body
+    assert report_file.name in body
+    assert "탐지 결과가 없습니다." in body
+
+
 def test_dashboard_filters_findings_by_query_parameters(tmp_path, monkeypatch):
     monkeypatch.setattr(app_module, "RESULT_DIR", tmp_path)
     monkeypatch.setattr(app_module.access_logger, "info", lambda message: None)

@@ -133,40 +133,59 @@ def build_dashboard_share_path(filters: dict, report_file: Path | None = None) -
     return f"/dashboard?{urlencode(query_params)}"
 
 
+def build_empty_dashboard_data(
+    filters: dict,
+    report_files: list[Path] | None = None,
+    report_file: Path | None = None,
+    error: str = "",
+) -> dict:
+    risk_counts = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}
+
+    return {
+        "report_file": report_file,
+        "report_files": report_files or [],
+        "analysis_info": {},
+        "summary": {
+            "total_requests": 0,
+            "total_login_events": 0,
+            "total_findings": 0,
+            "suspicious_ip_count": 0,
+            "risk_counts": risk_counts,
+        },
+        "statistics": {
+            "suspicious_ips": [],
+        },
+        "risk_chart": build_count_chart(risk_counts),
+        "attack_type_counts": {},
+        "attack_type_chart": [],
+        "top_request_ips": [],
+        "filter_options": {"severities": [], "attack_types": [], "ips": []},
+        "filters": filters,
+        "share_path": build_dashboard_share_path(filters, report_file),
+        "timeline": [],
+        "recent_findings": [],
+        "error": error,
+    }
+
+
 def load_dashboard_data(filters: dict | None = None, report_name: str = ""):
     filters = filters or {"severity": "", "attack_type": "", "ip": ""}
     report_files = get_json_reports()
     report_file = get_selected_json_report(report_name)
 
     if report_file is None:
-        risk_counts = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}
-        return {
-            "report_file": None,
-            "report_files": [],
-            "analysis_info": {},
-            "summary": {
-                "total_requests": 0,
-                "total_login_events": 0,
-                "total_findings": 0,
-                "suspicious_ip_count": 0,
-                "risk_counts": risk_counts,
-            },
-            "statistics": {
-                "suspicious_ips": [],
-            },
-            "risk_chart": build_count_chart(risk_counts),
-            "attack_type_counts": {},
-            "attack_type_chart": [],
-            "top_request_ips": [],
-            "filter_options": {"severities": [], "attack_types": [], "ips": []},
-            "filters": filters,
-            "share_path": build_dashboard_share_path(filters),
-            "timeline": [],
-            "recent_findings": [],
-        }
+        return build_empty_dashboard_data(filters)
 
-    with report_file.open("r", encoding="utf-8") as file:
-        payload = json.load(file)
+    try:
+        with report_file.open("r", encoding="utf-8") as file:
+            payload = json.load(file)
+    except (OSError, json.JSONDecodeError) as error:
+        return build_empty_dashboard_data(
+            filters=filters,
+            report_files=report_files,
+            report_file=report_file,
+            error=f"JSON 리포트를 읽을 수 없습니다: {error}",
+        )
 
     all_findings = payload.get("findings", [])
     findings = [
@@ -200,6 +219,7 @@ def load_dashboard_data(filters: dict | None = None, report_name: str = ""):
         "share_path": build_dashboard_share_path(filters, report_file),
         "timeline": timeline,
         "recent_findings": findings[-20:][::-1],
+        "error": "",
     }
 
 

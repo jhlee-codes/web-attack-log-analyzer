@@ -382,7 +382,11 @@
     </header>
 
     <main class="wrap">
-        {% if not dashboard.report_file %}
+        {% if dashboard.error %}
+            <div class="notice">
+                {{ dashboard.error }}
+            </div>
+        {% elif not dashboard.report_file %}
             <div class="notice">
                 아직 분석 JSON 리포트가 없습니다. `python analyzer/web_log_analyzer.py --format json` 명령으로 리포트를 생성한 뒤 새로고침하세요.
             </div>
