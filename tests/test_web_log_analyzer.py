@@ -113,6 +113,8 @@ def test_cli_format_json_creates_only_json_report(tmp_path):
     assert payload["findings"][0]["rule_id"] == "SQLI-001"
     assert payload["timeline"][0]["rule_id"] == "SQLI-001"
     assert all(item["timestamp"] != "-" for item in payload["timeline"])
+    assert payload["executive_summary"]["overall_risk"] == "HIGH"
+    assert payload["executive_summary"]["top_attack_type"] == "SQL Injection"
 
 
 def test_cli_uses_custom_rules_file(tmp_path):
@@ -324,7 +326,8 @@ def test_cli_markdown_report_includes_timeline_section(tmp_path):
 
     output_file = next(output_dir.glob("*.md"))
     report = output_file.read_text(encoding="utf-8")
-    assert "## 3. Timeline" in report
+    assert "## 3. Executive Summary" in report
+    assert "## 4. Timeline" in report
     assert "SQLI-001" in report
     assert "2026-06-20 10:00:00" in report
 

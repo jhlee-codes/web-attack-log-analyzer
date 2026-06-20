@@ -149,7 +149,7 @@ reason
 response
 ```
 
-JSON과 Markdown 리포트에는 시간 정보가 있는 탐지 이벤트를 시간순으로 정리한 `timeline`도 포함됩니다. 로그인 실패 반복처럼 집계형으로 생성되는 이벤트는 timestamp가 `-`이므로 타임라인에서는 제외됩니다.
+JSON과 Markdown 리포트에는 전체 위험도, 주요 공격 유형, 주요 의심 IP, 우선 대응을 요약한 Executive Summary와 시간순 탐지 이벤트를 정리한 `timeline`이 포함됩니다. 로그인 실패 반복처럼 집계형으로 생성되는 이벤트는 timestamp가 `-`이므로 타임라인에서는 제외됩니다.
 
 ## 대시보드 확인
 

@@ -566,6 +566,39 @@ def build_timeline(findings: list[dict]) -> list[dict]:
     return sorted(timeline, key=lambda item: item["timestamp"])
 
 
+def build_executive_summary(findings: list[dict]) -> dict:
+    if not findings:
+        return {
+            "overall_risk": "NONE",
+            "total_findings": 0,
+            "top_attack_type": "-",
+            "top_suspicious_ip": "-",
+            "priority_action": "탐지된 의심 이벤트가 없습니다.",
+        }
+
+    risk_counts = get_risk_counts(findings)
+    attack_type_counts = Counter(item["attack_type"] for item in findings)
+    ip_counts = Counter(item["ip"] for item in findings if item["ip"] != "-")
+
+    if risk_counts["HIGH"] > 0:
+        overall_risk = "HIGH"
+        priority_action = "HIGH 위험도 탐지 이벤트를 우선 확인하고 관련 IP와 요청 경로를 점검합니다."
+    elif risk_counts["MEDIUM"] > 0:
+        overall_risk = "MEDIUM"
+        priority_action = "반복 요청, 스캔 정황, 로그인 실패 패턴을 검토합니다."
+    else:
+        overall_risk = "LOW"
+        priority_action = "LOW 위험도 이벤트를 참고용으로 검토합니다."
+
+    return {
+        "overall_risk": overall_risk,
+        "total_findings": len(findings),
+        "top_attack_type": attack_type_counts.most_common(1)[0][0],
+        "top_suspicious_ip": ip_counts.most_common(1)[0][0] if ip_counts else "-",
+        "priority_action": priority_action,
+    }
+
+
 def build_report_payload(
     access_log: Path,
     login_log: Path,
@@ -580,6 +613,7 @@ def build_report_payload(
     risk_counts = get_risk_counts(findings)
     suspicious_ips = sorted({item["ip"] for item in findings if item["ip"] != "-"})
     timeline = build_timeline(findings)
+    executive_summary = build_executive_summary(findings)
 
     return {
         "analysis_info": {
@@ -600,6 +634,7 @@ def build_report_payload(
             "suspicious_ip_count": len(suspicious_ips),
             "risk_counts": risk_counts,
         },
+        "executive_summary": executive_summary,
         "statistics": {
             "suspicious_ips": suspicious_ips,
             "request_count_by_ip": dict(access_analysis["request_count_by_ip"]),
@@ -626,6 +661,7 @@ def write_txt_report(
     findings = access_analysis["findings"] + login_analysis["findings"]
     risk_counts = get_risk_counts(findings)
     suspicious_ips = sorted({item["ip"] for item in findings if item["ip"] != "-"})
+    executive_summary = build_executive_summary(findings)
 
     with result_file.open("w", encoding="utf-8") as report:
         report.write("==================================================\n")
@@ -651,6 +687,13 @@ def write_txt_report(
         report.write(f"의심 IP 수               : {len(suspicious_ips)}\n")
         report.write(f"HIGH 위험도              : {risk_counts['HIGH']}\n")
         report.write(f"MEDIUM 위험도            : {risk_counts['MEDIUM']}\n\n")
+
+        report.write("--------------------------------------------------\n")
+        report.write("[Executive Summary]\n")
+        report.write(f"전체 위험도              : {executive_summary['overall_risk']}\n")
+        report.write(f"주요 공격 유형           : {executive_summary['top_attack_type']}\n")
+        report.write(f"주요 의심 IP             : {executive_summary['top_suspicious_ip']}\n")
+        report.write(f"우선 대응                : {executive_summary['priority_action']}\n\n")
 
         if not access_analysis["access_log_exists"]:
             report.write("[알림] Access 로그 파일이 존재하지 않습니다.\n\n")
@@ -731,6 +774,7 @@ def write_markdown_report(
     risk_counts = get_risk_counts(findings)
     suspicious_ips = sorted({item["ip"] for item in findings if item["ip"] != "-"})
     timeline = build_timeline(findings)
+    executive_summary = build_executive_summary(findings)
 
     with markdown_file.open("w", encoding="utf-8") as report:
         report.write("# Web Attack Log Analysis Report\n\n")
@@ -758,7 +802,15 @@ def write_markdown_report(
         report.write(f"| HIGH 위험도 | {risk_counts['HIGH']} |\n")
         report.write(f"| MEDIUM 위험도 | {risk_counts['MEDIUM']} |\n\n")
 
-        report.write("## 3. Timeline\n\n")
+        report.write("## 3. Executive Summary\n\n")
+        report.write("| 항목 | 값 |\n")
+        report.write("|---|---|\n")
+        report.write(f"| 전체 위험도 | {executive_summary['overall_risk']} |\n")
+        report.write(f"| 주요 공격 유형 | {sanitize_markdown(executive_summary['top_attack_type'])} |\n")
+        report.write(f"| 주요 의심 IP | {sanitize_markdown(executive_summary['top_suspicious_ip'])} |\n")
+        report.write(f"| 우선 대응 | {sanitize_markdown(executive_summary['priority_action'])} |\n\n")
+
+        report.write("## 4. Timeline\n\n")
         report.write("| Time | Severity | Rule ID | Attack Type | IP | Method | Path | Evidence |\n")
         report.write("|---|---|---|---|---|---|---|---|\n")
 
@@ -777,7 +829,7 @@ def write_markdown_report(
         else:
             report.write("| - | INFO | - | 타임라인 이벤트 없음 | - | - | - | timestamp가 있는 탐지 이벤트 없음 |\n")
 
-        report.write("\n## 4. Detection Results\n\n")
+        report.write("\n## 5. Detection Results\n\n")
         report.write(
             "| Rule ID | Severity | Confidence | Source Log | Attack Type | Time | IP | Method | Path | Query | Status | User-Agent | Evidence | Reason | Recommended Response |\n"
         )
@@ -805,7 +857,7 @@ def write_markdown_report(
         else:
             report.write("| INFO-000 | INFO | HIGH | - | 정상 | - | - | - | - | - | - | - | - | 탐지된 웹 공격 의심 이벤트 없음 | 추가 조치 불필요 |\n")
 
-        report.write("\n## 5. Detection Rule Summary\n\n")
+        report.write("\n## 6. Detection Rule Summary\n\n")
         report.write("| Rule ID | Rule | Severity | Confidence | Description |\n")
         report.write("|---|---|---|---|---|\n")
         for rule in rules + BUILTIN_RULE_SUMMARY:
@@ -818,7 +870,7 @@ def write_markdown_report(
             )
         report.write("\n")
 
-        report.write("## 6. Recommended Response Guide\n\n")
+        report.write("## 7. Recommended Response Guide\n\n")
         report.write("- SQL Injection 탐지 시 입력값 검증과 DB 쿼리 처리 방식을 확인합니다.\n")
         report.write("- XSS 탐지 시 출력 인코딩, 입력값 필터링, CSP 적용 여부를 확인합니다.\n")
         report.write("- Path Traversal 탐지 시 파일 경로 입력값 검증과 접근 제한을 확인합니다.\n")
