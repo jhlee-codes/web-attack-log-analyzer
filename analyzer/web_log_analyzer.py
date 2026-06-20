@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import csv
 import json
 import re
 import sys
@@ -15,7 +16,7 @@ DEFAULT_LOGIN_LOG = Path("logs/login.log")
 DEFAULT_THRESHOLD = 5
 RESULT_DIR = Path("result")
 DEFAULT_RULES_FILE = Path(__file__).resolve().parent / "rules.json"
-SUPPORTED_REPORT_FORMATS = {"txt", "md", "json"}
+SUPPORTED_REPORT_FORMATS = {"txt", "md", "json", "csv"}
 SUPPORTED_SEVERITIES = {"HIGH", "MEDIUM", "LOW"}
 SUPPORTED_ACCESS_FORMATS = {"custom", "nginx"}
 
@@ -758,6 +759,38 @@ def write_json_report(
         report.write("\n")
 
 
+def write_csv_report(
+    csv_file: Path,
+    access_analysis: dict,
+    login_analysis: dict,
+):
+    findings = access_analysis["findings"] + login_analysis["findings"]
+    fieldnames = [
+        "rule_id",
+        "severity",
+        "confidence",
+        "source_log",
+        "attack_type",
+        "timestamp",
+        "ip",
+        "method",
+        "path",
+        "query",
+        "status",
+        "user_agent",
+        "evidence",
+        "reason",
+        "response",
+    ]
+
+    with csv_file.open("w", encoding="utf-8", newline="") as report:
+        writer = csv.DictWriter(report, fieldnames=fieldnames)
+        writer.writeheader()
+
+        for finding in findings:
+            writer.writerow({field: finding.get(field, "-") for field in fieldnames})
+
+
 def write_markdown_report(
     markdown_file: Path,
     access_log: Path,
@@ -959,7 +992,7 @@ def parse_args():
         dest="report_formats",
         type=parse_report_formats,
         default=set(SUPPORTED_REPORT_FORMATS),
-        help="Comma-separated report formats: txt, md, json, all. Default: all",
+        help="Comma-separated report formats: txt, md, json, csv, all. Default: all",
     )
 
     args = parser.parse_args()
@@ -1017,6 +1050,7 @@ def main():
     result_file = output_dir / f"web_attack_detection_result_{timestamp}.txt"
     markdown_file = output_dir / f"web_attack_detection_report_{timestamp}.md"
     json_file = output_dir / f"web_attack_detection_report_{timestamp}.json"
+    csv_file = output_dir / f"web_attack_detection_findings_{timestamp}.csv"
 
     rules = load_detection_rules(rules_file)
     access_analysis = analyze_access_log(access_log, threshold, rules, access_format)
@@ -1066,6 +1100,14 @@ def main():
             login_analysis=filtered_login_analysis,
         )
         print(f"분석 완료. JSON 리포트 파일: {json_file}")
+
+    if "csv" in report_formats:
+        write_csv_report(
+            csv_file=csv_file,
+            access_analysis=filtered_access_analysis,
+            login_analysis=filtered_login_analysis,
+        )
+        print(f"분석 완료. CSV 탐지 결과 파일: {csv_file}")
 
 
 if __name__ == "__main__":

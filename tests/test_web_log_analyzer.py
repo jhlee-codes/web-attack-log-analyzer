@@ -1,3 +1,4 @@
+import csv
 import json
 import subprocess
 import sys
@@ -115,6 +116,53 @@ def test_cli_format_json_creates_only_json_report(tmp_path):
     assert all(item["timestamp"] != "-" for item in payload["timeline"])
     assert payload["executive_summary"]["overall_risk"] == "HIGH"
     assert payload["executive_summary"]["top_attack_type"] == "SQL Injection"
+
+
+def test_cli_format_csv_creates_findings_csv_report(tmp_path):
+    access_log = tmp_path / "access.log"
+    login_log = tmp_path / "login.log"
+    output_dir = tmp_path / "result"
+    write_lines(
+        access_log,
+        [
+            '2026-06-20 10:00:00 HTTP_REQUEST ip=10.0.0.1 method=GET path="/login" query="id=1%27%20OR%20%271%27%3D%271" status=200 user_agent="Mozilla/5.0"',
+        ],
+    )
+    write_lines(login_log, [])
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(ANALYZER_SCRIPT),
+            "--access-log",
+            str(access_log),
+            "--login-log",
+            str(login_log),
+            "--format",
+            "csv",
+            "--output-dir",
+            str(output_dir),
+        ],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0
+
+    output_files = list(output_dir.iterdir())
+    assert len(output_files) == 1
+    assert output_files[0].name.startswith("web_attack_detection_findings_")
+    assert output_files[0].suffix == ".csv"
+
+    with output_files[0].open("r", encoding="utf-8", newline="") as file:
+        rows = list(csv.DictReader(file))
+
+    assert rows[0]["rule_id"] == "SQLI-001"
+    assert rows[0]["severity"] == "HIGH"
+    assert rows[0]["attack_type"] == "SQL Injection"
+    assert rows[0]["ip"] == "10.0.0.1"
 
 
 def test_cli_uses_custom_rules_file(tmp_path):

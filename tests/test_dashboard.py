@@ -164,6 +164,7 @@ def test_dashboard_renders_report_download_links(tmp_path, monkeypatch):
     report_file = tmp_path / "web_attack_detection_report_20260620_160000.json"
     markdown_file = tmp_path / "web_attack_detection_report_20260620_160000.md"
     txt_file = tmp_path / "web_attack_detection_result_20260620_160000.txt"
+    csv_file = tmp_path / "web_attack_detection_findings_20260620_160000.csv"
     report_file.write_text(
         json.dumps(
             {
@@ -190,6 +191,7 @@ def test_dashboard_renders_report_download_links(tmp_path, monkeypatch):
     )
     markdown_file.write_text("# report", encoding="utf-8")
     txt_file.write_text("report", encoding="utf-8")
+    csv_file.write_text("rule_id,severity\nSQLI-001,HIGH\n", encoding="utf-8")
 
     client = app_module.app.test_client()
     response = client.get("/dashboard")
@@ -200,6 +202,7 @@ def test_dashboard_renders_report_download_links(tmp_path, monkeypatch):
     assert "/reports/web_attack_detection_report_20260620_160000.json" in body
     assert "/reports/web_attack_detection_report_20260620_160000.md" in body
     assert "/reports/web_attack_detection_result_20260620_160000.txt" in body
+    assert "/reports/web_attack_detection_findings_20260620_160000.csv" in body
 
 
 def test_report_download_route_serves_allowed_report_file(tmp_path, monkeypatch):

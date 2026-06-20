@@ -19,7 +19,11 @@ RESULT_DIR = PROJECT_ROOT / "result"
 LOGIN_LOG_FILE = LOG_DIR / "login.log"
 ACCESS_LOG_FILE = LOG_DIR / "access.log"
 REPORT_FILE_PATTERN = re.compile(
-    r"^web_attack_detection_(?:report|result)_\d{8}_\d{6}\.(?:json|md|txt)$"
+    r"^web_attack_detection_(?:"
+    r"report_\d{8}_\d{6}\.(?:json|md)|"
+    r"result_\d{8}_\d{6}\.txt|"
+    r"findings_\d{8}_\d{6}\.csv"
+    r")$"
 )
 
 def setup_logger(logger_name, log_file):
@@ -66,6 +70,7 @@ def build_report_downloads(report_file: Path | None) -> list[dict]:
         ("JSON", RESULT_DIR / f"web_attack_detection_report_{timestamp}.json"),
         ("Markdown", RESULT_DIR / f"web_attack_detection_report_{timestamp}.md"),
         ("TXT", RESULT_DIR / f"web_attack_detection_result_{timestamp}.txt"),
+        ("CSV", RESULT_DIR / f"web_attack_detection_findings_{timestamp}.csv"),
     ]
 
     return [
