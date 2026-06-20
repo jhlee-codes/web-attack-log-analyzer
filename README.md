@@ -143,7 +143,7 @@ response
 
 ## 대시보드 확인
 
-Flask 서버를 실행한 뒤 브라우저에서 `/dashboard`로 접속하면 최신 JSON 리포트를 요약 화면으로 확인할 수 있습니다.
+Flask 서버를 실행한 뒤 브라우저에서 `/dashboard`로 접속하면 최신 JSON 리포트를 요약 화면으로 확인할 수 있습니다. 대시보드는 요청 수, 탐지 수, 위험도, 공격 유형, 요청 IP Top 5, 최근 탐지 결과를 표시합니다.
 
 ```bash
 python app/app.py

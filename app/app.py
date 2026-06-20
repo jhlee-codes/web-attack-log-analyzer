@@ -47,6 +47,7 @@ def load_dashboard_data():
     report_file = get_latest_json_report()
 
     if report_file is None:
+        risk_counts = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}
         return {
             "report_file": None,
             "analysis_info": {},
@@ -55,12 +56,15 @@ def load_dashboard_data():
                 "total_login_events": 0,
                 "total_findings": 0,
                 "suspicious_ip_count": 0,
-                "risk_counts": {"HIGH": 0, "MEDIUM": 0, "LOW": 0},
+                "risk_counts": risk_counts,
             },
             "statistics": {
                 "suspicious_ips": [],
             },
+            "risk_chart": build_count_chart(risk_counts),
             "attack_type_counts": {},
+            "attack_type_chart": [],
+            "top_request_ips": [],
             "recent_findings": [],
         }
 
@@ -69,15 +73,40 @@ def load_dashboard_data():
 
     findings = payload.get("findings", [])
     attack_type_counts = Counter(item.get("attack_type", "Unknown") for item in findings)
+    statistics = payload.get("statistics", {})
+    summary = payload.get("summary", {})
+    risk_counts = summary.get("risk_counts", {"HIGH": 0, "MEDIUM": 0, "LOW": 0})
+    request_count_by_ip = statistics.get("request_count_by_ip", {})
 
     return {
         "report_file": report_file,
         "analysis_info": payload.get("analysis_info", {}),
-        "summary": payload.get("summary", {}),
-        "statistics": payload.get("statistics", {}),
+        "summary": summary,
+        "statistics": statistics,
+        "risk_chart": build_count_chart(risk_counts),
         "attack_type_counts": dict(attack_type_counts.most_common()),
+        "attack_type_chart": build_count_chart(dict(attack_type_counts.most_common())),
+        "top_request_ips": build_count_chart(request_count_by_ip, limit=5),
         "recent_findings": findings[-20:][::-1],
     }
+
+
+def build_count_chart(counts: dict, limit: int | None = None) -> list[dict]:
+    sorted_items = sorted(counts.items(), key=lambda item: item[1], reverse=True)
+
+    if limit is not None:
+        sorted_items = sorted_items[:limit]
+
+    max_count = max((count for _, count in sorted_items), default=0)
+
+    return [
+        {
+            "label": label,
+            "count": count,
+            "percent": round((count / max_count) * 100) if max_count else 0,
+        }
+        for label, count in sorted_items
+    ]
 
 
 # 로그인 로그 설정

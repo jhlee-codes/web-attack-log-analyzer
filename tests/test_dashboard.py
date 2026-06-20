@@ -39,6 +39,7 @@ def test_dashboard_renders_latest_json_report(tmp_path, monkeypatch):
                 },
                 "statistics": {
                     "suspicious_ips": ["10.0.0.1"],
+                    "request_count_by_ip": {"10.0.0.1": 10},
                 },
                 "findings": [
                     {
@@ -65,3 +66,4 @@ def test_dashboard_renders_latest_json_report(tmp_path, monkeypatch):
     assert "web_attack_detection_report_20260620_160000.json" in body
     assert "SQLI-001" in body
     assert "10.0.0.1" in body
+    assert "요청 IP Top 5" in body
