@@ -133,6 +133,17 @@ def build_dashboard_share_path(filters: dict, report_file: Path | None = None) -
     return f"/dashboard?{urlencode(query_params)}"
 
 
+def normalize_executive_summary(executive_summary: dict | None) -> dict:
+    executive_summary = executive_summary or {}
+
+    return {
+        "overall_risk": executive_summary.get("overall_risk", "NONE"),
+        "top_attack_type": executive_summary.get("top_attack_type", "-"),
+        "top_suspicious_ip": executive_summary.get("top_suspicious_ip", "-"),
+        "priority_action": executive_summary.get("priority_action", "-"),
+    }
+
+
 def build_empty_dashboard_data(
     filters: dict,
     report_files: list[Path] | None = None,
@@ -152,6 +163,7 @@ def build_empty_dashboard_data(
             "suspicious_ip_count": 0,
             "risk_counts": risk_counts,
         },
+        "executive_summary": normalize_executive_summary(None),
         "statistics": {
             "suspicious_ips": [],
         },
@@ -209,6 +221,7 @@ def load_dashboard_data(filters: dict | None = None, report_name: str = ""):
         "report_files": report_files,
         "analysis_info": payload.get("analysis_info", {}),
         "summary": summary,
+        "executive_summary": normalize_executive_summary(payload.get("executive_summary")),
         "statistics": statistics,
         "risk_chart": build_count_chart(risk_counts),
         "attack_type_counts": dict(attack_type_counts.most_common()),

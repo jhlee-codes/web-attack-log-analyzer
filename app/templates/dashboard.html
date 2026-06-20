@@ -175,6 +175,34 @@
             line-height: 1;
         }
 
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .summary-item {
+            padding: 16px;
+            border-right: 1px solid #edf1f6;
+        }
+
+        .summary-item:last-child {
+            border-right: 0;
+        }
+
+        .summary-label {
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .summary-value {
+            font-size: 14px;
+            font-weight: 700;
+            line-height: 1.45;
+            overflow-wrap: anywhere;
+        }
+
         .split {
             display: grid;
             grid-template-columns: minmax(0, 1fr) 320px;
@@ -350,9 +378,19 @@
             }
 
             .stats,
+            .summary-grid,
             .split,
             .filters {
                 grid-template-columns: 1fr;
+            }
+
+            .summary-item {
+                border-right: 0;
+                border-bottom: 1px solid #edf1f6;
+            }
+
+            .summary-item:last-child {
+                border-bottom: 0;
             }
 
             .actions {
@@ -457,6 +495,32 @@
                 <div class="stat-value">{{ dashboard.summary.suspicious_ip_count }}</div>
             </div>
         </div>
+
+        <section style="margin-bottom: 18px;">
+            <div class="section-head">
+                <h2>Executive Summary</h2>
+            </div>
+            <div class="summary-grid">
+                <div class="summary-item">
+                    <div class="summary-label">전체 위험도</div>
+                    <div class="summary-value">
+                        <span class="badge {{ dashboard.executive_summary.overall_risk|lower }}">{{ dashboard.executive_summary.overall_risk }}</span>
+                    </div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-label">주요 공격 유형</div>
+                    <div class="summary-value">{{ dashboard.executive_summary.top_attack_type }}</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-label">주요 의심 IP</div>
+                    <div class="summary-value mono">{{ dashboard.executive_summary.top_suspicious_ip }}</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-label">우선 대응</div>
+                    <div class="summary-value">{{ dashboard.executive_summary.priority_action }}</div>
+                </div>
+            </div>
+        </section>
 
         <div class="split">
             <div>
