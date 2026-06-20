@@ -230,7 +230,7 @@
                                             {% for download in report.downloads %}
                                                 <a href="{{ download.url }}">{{ download.label }}</a>
                                             {% endfor %}
-                                            <form class="delete-form" method="POST" action="/reports/delete">
+                                            <form class="delete-form" method="POST" action="/reports/delete" onsubmit="return confirm('이 리포트와 같은 타임스탬프의 JSON, Markdown, TXT, CSV 파일을 삭제할까요?');">
                                                 <input type="hidden" name="filename" value="{{ report.filename }}">
                                                 <button class="link-button" type="submit">삭제</button>
                                             </form>

@@ -116,6 +116,8 @@ def test_reports_page_renders_report_history(tmp_path, monkeypatch):
     assert "/dashboard?report=web_attack_detection_report_20260620_160000.json" in body
     assert "/reports/web_attack_detection_report_20260620_160000.md" in body
     assert "/reports/web_attack_detection_findings_20260620_160000.csv" in body
+    assert "onsubmit=\"return confirm(" in body
+    assert "JSON, Markdown, TXT, CSV 파일을 삭제할까요?" in body
 
 
 def test_reports_page_marks_invalid_json_report(tmp_path, monkeypatch):
