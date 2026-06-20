@@ -74,7 +74,7 @@
 
         .filters {
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+            grid-template-columns: 1.4fr repeat(3, minmax(0, 1fr)) auto;
             gap: 12px;
             align-items: end;
             background: var(--panel);
@@ -364,6 +364,14 @@
         {% endif %}
 
         <form class="filters" method="GET" action="/dashboard">
+            <div class="field">
+                <label for="report">Report</label>
+                <select id="report" name="report">
+                    {% for report_file in dashboard.report_files %}
+                        <option value="{{ report_file.name }}" {% if dashboard.report_file and dashboard.report_file.name == report_file.name %}selected{% endif %}>{{ report_file.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
             <div class="field">
                 <label for="severity">Severity</label>
                 <select id="severity" name="severity">

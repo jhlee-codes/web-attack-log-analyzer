@@ -101,6 +101,111 @@ def test_dashboard_renders_latest_json_report(tmp_path, monkeypatch):
     assert "2026-06-20 16:00:00" in body
 
 
+def test_dashboard_can_select_report_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "RESULT_DIR", tmp_path)
+    monkeypatch.setattr(app_module.access_logger, "info", lambda message: None)
+    old_report_file = tmp_path / "web_attack_detection_report_20260620_150000.json"
+    latest_report_file = tmp_path / "web_attack_detection_report_20260620_160000.json"
+
+    old_report_file.write_text(
+        json.dumps(
+            {
+                "analysis_info": {
+                    "analysis_time": "2026-06-20 15:00:00",
+                },
+                "summary": {
+                    "total_requests": 6,
+                    "total_login_events": 1,
+                    "total_findings": 1,
+                    "suspicious_ip_count": 1,
+                    "risk_counts": {"HIGH": 1, "MEDIUM": 0, "LOW": 0},
+                },
+                "statistics": {
+                    "suspicious_ips": ["10.0.0.1"],
+                    "request_count_by_ip": {"10.0.0.1": 6},
+                },
+                "timeline": [
+                    {
+                        "timestamp": "2026-06-20 15:00:00",
+                        "rule_id": "SQLI-001",
+                        "severity": "HIGH",
+                        "attack_type": "SQL Injection",
+                        "ip": "10.0.0.1",
+                        "path": "/login",
+                        "evidence": "matched_pattern=' or",
+                    },
+                ],
+                "findings": [
+                    {
+                        "rule_id": "SQLI-001",
+                        "severity": "HIGH",
+                        "attack_type": "SQL Injection",
+                        "ip": "10.0.0.1",
+                        "path": "/login",
+                        "evidence": "matched_pattern=' or",
+                        "response": "입력값 검증을 확인합니다.",
+                    },
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    latest_report_file.write_text(
+        json.dumps(
+            {
+                "analysis_info": {
+                    "analysis_time": "2026-06-20 16:00:00",
+                },
+                "summary": {
+                    "total_requests": 7,
+                    "total_login_events": 1,
+                    "total_findings": 1,
+                    "suspicious_ip_count": 1,
+                    "risk_counts": {"HIGH": 0, "MEDIUM": 1, "LOW": 0},
+                },
+                "statistics": {
+                    "suspicious_ips": ["10.0.0.2"],
+                    "request_count_by_ip": {"10.0.0.2": 7},
+                },
+                "timeline": [
+                    {
+                        "timestamp": "2026-06-20 16:00:00",
+                        "rule_id": "XSS-001",
+                        "severity": "MEDIUM",
+                        "attack_type": "XSS",
+                        "ip": "10.0.0.2",
+                        "path": "/search",
+                        "evidence": "matched_pattern=<script",
+                    },
+                ],
+                "findings": [
+                    {
+                        "rule_id": "XSS-001",
+                        "severity": "MEDIUM",
+                        "attack_type": "XSS",
+                        "ip": "10.0.0.2",
+                        "path": "/search",
+                        "evidence": "matched_pattern=<script",
+                        "response": "출력 인코딩을 확인합니다.",
+                    },
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    client = app_module.app.test_client()
+    response = client.get(f"/dashboard?report={old_report_file.name}")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert f'<option value="{old_report_file.name}" selected>' in body
+    assert "SQLI-001" in body
+    assert "XSS-001" not in body
+
+
 def test_dashboard_filters_findings_by_query_parameters(tmp_path, monkeypatch):
     monkeypatch.setattr(app_module, "RESULT_DIR", tmp_path)
     monkeypatch.setattr(app_module.access_logger, "info", lambda message: None)

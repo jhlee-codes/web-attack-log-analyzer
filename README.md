@@ -163,7 +163,7 @@ python app/app.py
 http://127.0.0.1:5000/dashboard
 ```
 
-대시보드는 `result/web_attack_detection_report_*.json` 중 가장 최신 파일을 읽습니다. JSON 리포트가 없다면 먼저 분석기를 실행합니다.
+대시보드는 `result/web_attack_detection_report_*.json` 중 가장 최신 파일을 기본으로 읽으며, Report 선택 상자에서 이전 JSON 리포트도 확인할 수 있습니다. JSON 리포트가 없다면 먼저 분석기를 실행합니다.
 
 ```bash
 python analyzer/web_log_analyzer.py --format json
@@ -175,6 +175,7 @@ python analyzer/web_log_analyzer.py --format json
 http://127.0.0.1:5000/dashboard?severity=HIGH
 http://127.0.0.1:5000/dashboard?attack_type=SQL%20Injection
 http://127.0.0.1:5000/dashboard?severity=HIGH&ip=127.0.0.1
+http://127.0.0.1:5000/dashboard?report=web_attack_detection_report_20260620_160000.json
 ```
 
 ## 탐지 룰

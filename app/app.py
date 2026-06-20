@@ -34,13 +34,22 @@ def setup_logger(logger_name, log_file):
     return logger
 
 
-def get_latest_json_report():
-    report_files = sorted(RESULT_DIR.glob("web_attack_detection_report_*.json"))
+def get_json_reports():
+    return sorted(RESULT_DIR.glob("web_attack_detection_report_*.json"), reverse=True)
+
+
+def get_selected_json_report(report_name: str = ""):
+    report_files = get_json_reports()
 
     if not report_files:
         return None
 
-    return report_files[-1]
+    if report_name:
+        for report_file in report_files:
+            if report_file.name == report_name:
+                return report_file
+
+    return report_files[0]
 
 
 def parse_dashboard_filters(args):
@@ -107,14 +116,16 @@ def build_filter_options(findings: list[dict]) -> dict:
     }
 
 
-def load_dashboard_data(filters: dict | None = None):
+def load_dashboard_data(filters: dict | None = None, report_name: str = ""):
     filters = filters or {"severity": "", "attack_type": "", "ip": ""}
-    report_file = get_latest_json_report()
+    report_files = get_json_reports()
+    report_file = get_selected_json_report(report_name)
 
     if report_file is None:
         risk_counts = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}
         return {
             "report_file": None,
+            "report_files": [],
             "analysis_info": {},
             "summary": {
                 "total_requests": 0,
@@ -158,6 +169,7 @@ def load_dashboard_data(filters: dict | None = None):
 
     return {
         "report_file": report_file,
+        "report_files": report_files,
         "analysis_info": payload.get("analysis_info", {}),
         "summary": summary,
         "statistics": statistics,
@@ -228,7 +240,8 @@ def index():
 @app.route("/dashboard")
 def dashboard():
     filters = parse_dashboard_filters(request.args)
-    return render_template("dashboard.html", dashboard=load_dashboard_data(filters))
+    report_name = request.args.get("report", "").strip()
+    return render_template("dashboard.html", dashboard=load_dashboard_data(filters, report_name))
 
 
 @app.route("/login", methods=["GET", "POST"])
