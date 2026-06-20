@@ -14,6 +14,7 @@ DEFAULT_ACCESS_LOG = Path("logs/access.log")
 DEFAULT_LOGIN_LOG = Path("logs/login.log")
 DEFAULT_THRESHOLD = 5
 RESULT_DIR = Path("result")
+DEFAULT_RULES_FILE = Path(__file__).resolve().parent / "rules.json"
 SUPPORTED_REPORT_FORMATS = {"txt", "md", "json"}
 
 
@@ -37,60 +38,28 @@ LOGIN_LOG_PATTERN = re.compile(
 )
 
 
-SQLI_PATTERNS = [
-    "' or",
-    '" or',
-    " or 1=1",
-    "union select",
-    "--",
-    "#",
-    "sleep(",
-    "benchmark(",
-    "information_schema",
-    "select ",
-    "drop table",
-]
-
-XSS_PATTERNS = [
-    "<script",
-    "</script>",
-    "alert(",
-    "onerror=",
-    "onload=",
-    "javascript:",
-    "<img",
-    "<svg",
-]
-
-PATH_TRAVERSAL_PATTERNS = [
-    "../",
-    "..\\",
-    "/etc/passwd",
-    "/etc/shadow",
-    "boot.ini",
-    "win.ini",
-    "/proc/self/environ",
-]
-
-ADMIN_PATH_PATTERNS = [
-    "/admin",
-    "/administrator",
-    "/wp-admin",
-    "/manager",
-    "/phpmyadmin",
-    "/login/admin",
-]
-
-SCANNER_USER_AGENTS = [
-    "sqlmap",
-    "nikto",
-    "nmap",
-    "dirbuster",
-    "gobuster",
-    "wpscan",
-    "curl",
-    "wget",
-    "python-requests",
+BUILTIN_RULE_SUMMARY = [
+    {
+        "rule_id": "SCAN-002",
+        "attack_type": "Repeated 404",
+        "severity": "MEDIUM",
+        "confidence": "MEDIUM",
+        "description": "동일 IP에서 404 응답 반복 발생 탐지",
+    },
+    {
+        "rule_id": "AUTH-001",
+        "attack_type": "Repeated Login Failure",
+        "severity": "MEDIUM/HIGH",
+        "confidence": "MEDIUM/HIGH",
+        "description": "동일 IP에서 로그인 실패 반복 발생 탐지",
+    },
+    {
+        "rule_id": "AUTH-002",
+        "attack_type": "Successful Login After Failures",
+        "severity": "HIGH",
+        "confidence": "HIGH",
+        "description": "반복 실패 후 성공 로그인 탐지",
+    },
 ]
 
 
@@ -124,6 +93,45 @@ def parse_login_log_line(line: str):
         "user_id": match.group("user_id"),
         "user_agent": match.group("user_agent"),
     }
+
+
+def load_detection_rules(rules_file: Path = DEFAULT_RULES_FILE) -> list[dict]:
+    with rules_file.open("r", encoding="utf-8") as file:
+        payload = json.load(file)
+
+    rules = payload.get("rules", [])
+
+    if not isinstance(rules, list):
+        raise ValueError("rules 파일의 rules 값은 list여야 합니다.")
+
+    required_fields = {
+        "rule_id",
+        "attack_type",
+        "severity",
+        "confidence",
+        "source",
+        "evidence_key",
+        "patterns",
+        "reason",
+        "response",
+        "description",
+    }
+
+    for rule in rules:
+        missing_fields = required_fields - set(rule)
+
+        if missing_fields:
+            missing = ", ".join(sorted(missing_fields))
+            rule_id = rule.get("rule_id", "UNKNOWN")
+            raise ValueError(f"{rule_id} 룰에 필수 필드가 없습니다: {missing}")
+
+        if rule["source"] not in {"request", "user_agent"}:
+            raise ValueError(f"{rule['rule_id']} 룰 source는 request 또는 user_agent여야 합니다.")
+
+        if not isinstance(rule["patterns"], list) or not rule["patterns"]:
+            raise ValueError(f"{rule['rule_id']} 룰 patterns는 비어 있지 않은 list여야 합니다.")
+
+    return rules
 
 
 def normalize_request_text(path: str, query: str) -> str:
@@ -185,12 +193,34 @@ def add_finding(
     )
 
 
-def analyze_access_log(access_log: Path, threshold: int):
+def add_pattern_rule_finding(findings: list, rule: dict, log: dict, matched_pattern: str):
+    add_finding(
+        findings=findings,
+        rule_id=rule["rule_id"],
+        risk=rule["severity"],
+        attack_type=rule["attack_type"],
+        confidence=rule["confidence"],
+        source_log="access",
+        timestamp=log["timestamp"],
+        ip=log["ip"],
+        method=log["method"],
+        path=log["path"],
+        query=log["query"],
+        status=str(log["status"]),
+        user_agent=log["user_agent"],
+        evidence=f"{rule['evidence_key']}={matched_pattern}",
+        reason=rule["reason"],
+        response=rule["response"],
+    )
+
+
+def analyze_access_log(access_log: Path, threshold: int, rules: list[dict] | None = None):
     findings = []
     total_requests = 0
 
     status_404_by_ip = Counter()
     request_count_by_ip = Counter()
+    rules = rules or load_detection_rules()
 
     if not access_log.exists():
         return {
@@ -225,105 +255,16 @@ def analyze_access_log(access_log: Path, threshold: int):
             request_text = normalize_request_text(path, query)
             user_agent_lower = user_agent.lower()
 
-            if contains_any_pattern(request_text, SQLI_PATTERNS):
-                add_finding(
-                    findings=findings,
-                    rule_id="SQLI-001",
-                    risk="HIGH",
-                    attack_type="SQL Injection",
-                    confidence="HIGH",
-                    source_log="access",
-                    timestamp=log["timestamp"],
-                    ip=ip,
-                    method=method,
-                    path=path,
-                    query=query,
-                    status=str(status),
-                    user_agent=user_agent,
-                    evidence=f"matched_pattern={find_first_pattern(request_text, SQLI_PATTERNS)}",
-                    reason="요청 경로 또는 쿼리 문자열에서 SQL Injection 의심 패턴 발견",
-                    response="입력값 검증, Prepared Statement 사용 여부, WAF 룰을 점검합니다.",
-                )
+            for rule in rules:
+                target_text = request_text if rule["source"] == "request" else user_agent_lower
 
-            if contains_any_pattern(request_text, XSS_PATTERNS):
-                add_finding(
-                    findings=findings,
-                    rule_id="XSS-001",
-                    risk="HIGH",
-                    attack_type="XSS",
-                    confidence="HIGH",
-                    source_log="access",
-                    timestamp=log["timestamp"],
-                    ip=ip,
-                    method=method,
-                    path=path,
-                    query=query,
-                    status=str(status),
-                    user_agent=user_agent,
-                    evidence=f"matched_pattern={find_first_pattern(request_text, XSS_PATTERNS)}",
-                    reason="요청 경로 또는 쿼리 문자열에서 XSS 의심 패턴 발견",
-                    response="출력 인코딩, 입력값 필터링, CSP 적용 여부를 점검합니다.",
-                )
-
-            if contains_any_pattern(request_text, PATH_TRAVERSAL_PATTERNS):
-                add_finding(
-                    findings=findings,
-                    rule_id="PATH-001",
-                    risk="HIGH",
-                    attack_type="Path Traversal",
-                    confidence="HIGH",
-                    source_log="access",
-                    timestamp=log["timestamp"],
-                    ip=ip,
-                    method=method,
-                    path=path,
-                    query=query,
-                    status=str(status),
-                    user_agent=user_agent,
-                    evidence=f"matched_pattern={find_first_pattern(request_text, PATH_TRAVERSAL_PATTERNS)}",
-                    reason="파일 경로 조작 또는 민감 파일 접근 시도 패턴 발견",
-                    response="파일 경로 입력값 검증, 상위 디렉터리 접근 차단 여부를 확인합니다.",
-                )
-
-            if contains_any_pattern(request_text, ADMIN_PATH_PATTERNS):
-                add_finding(
-                    findings=findings,
-                    rule_id="ADMIN-001",
-                    risk="MEDIUM",
-                    attack_type="Admin Page Access",
-                    confidence="MEDIUM",
-                    source_log="access",
-                    timestamp=log["timestamp"],
-                    ip=ip,
-                    method=method,
-                    path=path,
-                    query=query,
-                    status=str(status),
-                    user_agent=user_agent,
-                    evidence=f"matched_path={find_first_pattern(request_text, ADMIN_PATH_PATTERNS)}",
-                    reason="관리자 페이지 또는 관리 도구 접근 시도 탐지",
-                    response="관리자 페이지 접근 IP 제한, 인증 정책, 접근 로그를 확인합니다.",
-                )
-
-            if contains_any_pattern(user_agent_lower, SCANNER_USER_AGENTS):
-                add_finding(
-                    findings=findings,
-                    rule_id="SCAN-001",
-                    risk="MEDIUM",
-                    attack_type="Suspicious User-Agent",
-                    confidence="MEDIUM",
-                    source_log="access",
-                    timestamp=log["timestamp"],
-                    ip=ip,
-                    method=method,
-                    path=path,
-                    query=query,
-                    status=str(status),
-                    user_agent=user_agent,
-                    evidence=f"matched_user_agent={find_first_pattern(user_agent_lower, SCANNER_USER_AGENTS)}",
-                    reason="스캐너 또는 자동화 도구로 의심되는 User-Agent 탐지",
-                    response="해당 IP의 요청 패턴을 추가 확인하고 필요 시 차단을 검토합니다.",
-                )
+                if contains_any_pattern(target_text, rule["patterns"]):
+                    add_pattern_rule_finding(
+                        findings=findings,
+                        rule=rule,
+                        log=log,
+                        matched_pattern=find_first_pattern(target_text, rule["patterns"]),
+                    )
 
     for ip, count in status_404_by_ip.items():
         if count >= threshold:
@@ -488,6 +429,7 @@ def parse_report_formats(value: str) -> set[str]:
 def build_report_payload(
     access_log: Path,
     login_log: Path,
+    rules_file: Path,
     threshold: int,
     access_analysis: dict,
     login_analysis: dict,
@@ -501,6 +443,7 @@ def build_report_payload(
             "analysis_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "access_log": str(access_log),
             "login_log": str(login_log),
+            "rules_file": str(rules_file),
             "threshold": threshold,
             "access_log_exists": access_analysis["access_log_exists"],
             "login_log_exists": login_analysis["login_log_exists"],
@@ -527,6 +470,7 @@ def write_txt_report(
     result_file: Path,
     access_log: Path,
     login_log: Path,
+    rules_file: Path,
     threshold: int,
     access_analysis: dict,
     login_analysis: dict,
@@ -544,6 +488,7 @@ def write_txt_report(
         report.write(f"분석 시간        : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         report.write(f"Access 로그 파일 : {access_log}\n")
         report.write(f"Login 로그 파일  : {login_log}\n")
+        report.write(f"탐지 룰 파일     : {rules_file}\n")
         report.write(f"반복 탐지 기준   : 동일 IP에서 {threshold}회 이상\n\n")
 
         report.write("--------------------------------------------------\n")
@@ -595,6 +540,7 @@ def write_json_report(
     json_file: Path,
     access_log: Path,
     login_log: Path,
+    rules_file: Path,
     threshold: int,
     access_analysis: dict,
     login_analysis: dict,
@@ -602,6 +548,7 @@ def write_json_report(
     payload = build_report_payload(
         access_log=access_log,
         login_log=login_log,
+        rules_file=rules_file,
         threshold=threshold,
         access_analysis=access_analysis,
         login_analysis=login_analysis,
@@ -616,6 +563,8 @@ def write_markdown_report(
     markdown_file: Path,
     access_log: Path,
     login_log: Path,
+    rules_file: Path,
+    rules: list[dict],
     threshold: int,
     access_analysis: dict,
     login_analysis: dict,
@@ -633,6 +582,7 @@ def write_markdown_report(
         report.write(f"| 분석 시간 | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} |\n")
         report.write(f"| Access 로그 파일 | {access_log} |\n")
         report.write(f"| Login 로그 파일 | {login_log} |\n")
+        report.write(f"| 탐지 룰 파일 | {rules_file} |\n")
         report.write(f"| 반복 탐지 기준 | 동일 IP에서 {threshold}회 이상 |\n\n")
 
         report.write("## 2. Summary\n\n")
@@ -676,14 +626,15 @@ def write_markdown_report(
         report.write("\n## 4. Detection Rule Summary\n\n")
         report.write("| Rule ID | Rule | Severity | Confidence | Description |\n")
         report.write("|---|---|---|---|---|\n")
-        report.write("| SQLI-001 | SQL Injection | HIGH | HIGH | SQL Injection 의심 문자열 탐지 |\n")
-        report.write("| XSS-001 | XSS | HIGH | HIGH | Script 삽입 또는 이벤트 핸들러 기반 XSS 패턴 탐지 |\n")
-        report.write("| PATH-001 | Path Traversal | HIGH | HIGH | ../, /etc/passwd 등 경로 조작 시도 탐지 |\n")
-        report.write("| ADMIN-001 | Admin Page Access | MEDIUM | MEDIUM | 관리자 페이지 접근 시도 탐지 |\n")
-        report.write("| SCAN-001 | Suspicious User-Agent | MEDIUM | MEDIUM | sqlmap, nikto, curl 등 자동화 도구 User-Agent 탐지 |\n")
-        report.write("| SCAN-002 | Repeated 404 | MEDIUM | MEDIUM | 동일 IP에서 404 응답 반복 발생 탐지 |\n")
-        report.write("| AUTH-001 | Repeated Login Failure | MEDIUM/HIGH | MEDIUM/HIGH | 동일 IP에서 로그인 실패 반복 발생 탐지 |\n")
-        report.write("| AUTH-002 | Successful Login After Failures | HIGH | HIGH | 반복 실패 후 성공 로그인 탐지 |\n\n")
+        for rule in rules + BUILTIN_RULE_SUMMARY:
+            report.write(
+                f"| {sanitize_markdown(rule['rule_id'])} "
+                f"| {sanitize_markdown(rule['attack_type'])} "
+                f"| {sanitize_markdown(rule['severity'])} "
+                f"| {sanitize_markdown(rule['confidence'])} "
+                f"| {sanitize_markdown(rule['description'])} |\n"
+            )
+        report.write("\n")
 
         report.write("## 5. Recommended Response Guide\n\n")
         report.write("- SQL Injection 탐지 시 입력값 검증과 DB 쿼리 처리 방식을 확인합니다.\n")
@@ -740,6 +691,12 @@ def parse_args():
         help=f"Directory to save report files. Default: {RESULT_DIR}",
     )
     parser.add_argument(
+        "--rules-file",
+        type=Path,
+        default=DEFAULT_RULES_FILE,
+        help=f"Detection rules JSON file. Default: {DEFAULT_RULES_FILE}",
+    )
+    parser.add_argument(
         "--format",
         dest="report_formats",
         type=parse_report_formats,
@@ -777,12 +734,17 @@ def main():
     login_log = args.login_log
     threshold = args.threshold
     output_dir = args.output_dir
+    rules_file = args.rules_file
     report_formats = args.report_formats
 
     if not access_log.exists() and not login_log.exists():
         print(f"Error: 분석할 로그 파일이 없습니다.")
         print(f"- Access log: {access_log}")
         print(f"- Login log : {login_log}")
+        sys.exit(1)
+
+    if not rules_file.exists():
+        print(f"Error: 탐지 룰 파일이 없습니다: {rules_file}")
         sys.exit(1)
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -792,7 +754,8 @@ def main():
     markdown_file = output_dir / f"web_attack_detection_report_{timestamp}.md"
     json_file = output_dir / f"web_attack_detection_report_{timestamp}.json"
 
-    access_analysis = analyze_access_log(access_log, threshold)
+    rules = load_detection_rules(rules_file)
+    access_analysis = analyze_access_log(access_log, threshold, rules)
     login_analysis = analyze_login_log(login_log, threshold)
 
     if "txt" in report_formats:
@@ -800,6 +763,7 @@ def main():
             result_file=result_file,
             access_log=access_log,
             login_log=login_log,
+            rules_file=rules_file,
             threshold=threshold,
             access_analysis=access_analysis,
             login_analysis=login_analysis,
@@ -811,6 +775,8 @@ def main():
             markdown_file=markdown_file,
             access_log=access_log,
             login_log=login_log,
+            rules_file=rules_file,
+            rules=rules,
             threshold=threshold,
             access_analysis=access_analysis,
             login_analysis=login_analysis,
@@ -822,6 +788,7 @@ def main():
             json_file=json_file,
             access_log=access_log,
             login_log=login_log,
+            rules_file=rules_file,
             threshold=threshold,
             access_analysis=access_analysis,
             login_analysis=login_analysis,

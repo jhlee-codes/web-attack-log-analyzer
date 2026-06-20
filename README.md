@@ -28,6 +28,7 @@ app/
   templates/login.html           # 로그인 페이지
 analyzer/
   web_log_analyzer.py            # 로그 분석기
+  rules.json                     # 탐지 룰 설정 파일
 scripts/
   generate_test_traffic.py       # 로컬 테스트 트래픽 생성기
 logs/
@@ -103,6 +104,7 @@ python analyzer/web_log_analyzer.py \
 --threshold    반복 이벤트 탐지 기준
 --format       출력 포맷: txt, md, json, all
 --output-dir   리포트 저장 디렉터리
+--rules-file   탐지 룰 JSON 파일 경로
 ```
 
 예시:
@@ -111,6 +113,7 @@ python analyzer/web_log_analyzer.py \
 python analyzer/web_log_analyzer.py --format json
 python analyzer/web_log_analyzer.py --format txt,md
 python analyzer/web_log_analyzer.py --threshold 10 --output-dir result
+python analyzer/web_log_analyzer.py --rules-file analyzer/rules.json
 ```
 
 ## 리포트 출력
@@ -157,6 +160,27 @@ python analyzer/web_log_analyzer.py --format json
 ```
 
 ## 탐지 룰
+
+패턴 기반 탐지 룰은 `analyzer/rules.json`에서 관리합니다. 룰 파일을 수정하면 분석기 코드를 바꾸지 않고도 탐지 패턴, 위험도, 신뢰도, 대응 문구를 조정할 수 있습니다.
+
+룰 예시:
+
+```json
+{
+  "rule_id": "SQLI-001",
+  "attack_type": "SQL Injection",
+  "severity": "HIGH",
+  "confidence": "HIGH",
+  "source": "request",
+  "evidence_key": "matched_pattern",
+  "description": "SQL Injection 의심 문자열 탐지",
+  "patterns": ["' or", "union select"],
+  "reason": "요청 경로 또는 쿼리 문자열에서 SQL Injection 의심 패턴 발견",
+  "response": "입력값 검증, Prepared Statement 사용 여부, WAF 룰을 점검합니다."
+}
+```
+
+`source`는 `request` 또는 `user_agent`를 사용할 수 있습니다.
 
 | Rule ID | 탐지 유형 | 위험도 |
 |---|---|---|

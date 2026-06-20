@@ -93,7 +93,72 @@ def test_cli_format_json_creates_only_json_report(tmp_path):
 
     payload = json.loads(output_files[0].read_text(encoding="utf-8"))
     assert payload["summary"]["total_findings"] == 1
+    assert payload["analysis_info"]["rules_file"].endswith("rules.json")
     assert payload["findings"][0]["rule_id"] == "SQLI-001"
+
+
+def test_cli_uses_custom_rules_file(tmp_path):
+    access_log = tmp_path / "access.log"
+    login_log = tmp_path / "login.log"
+    rules_file = tmp_path / "rules.json"
+    output_dir = tmp_path / "result"
+    write_lines(
+        access_log,
+        [
+            '2026-06-20 10:00:00 HTTP_REQUEST ip=10.0.0.1 method=GET path="/health" query="token=custom-attack" status=200 user_agent="Mozilla/5.0"',
+        ],
+    )
+    write_lines(login_log, [])
+    rules_file.write_text(
+        json.dumps(
+            {
+                "rules": [
+                    {
+                        "rule_id": "CUSTOM-001",
+                        "attack_type": "Custom Attack",
+                        "severity": "HIGH",
+                        "confidence": "HIGH",
+                        "source": "request",
+                        "evidence_key": "matched_pattern",
+                        "description": "커스텀 공격 패턴 탐지",
+                        "patterns": ["custom-attack"],
+                        "reason": "커스텀 공격 패턴 발견",
+                        "response": "커스텀 룰 대응 절차를 확인합니다.",
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(ANALYZER_SCRIPT),
+            "--access-log",
+            str(access_log),
+            "--login-log",
+            str(login_log),
+            "--rules-file",
+            str(rules_file),
+            "--format",
+            "json",
+            "--output-dir",
+            str(output_dir),
+        ],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0
+
+    output_file = next(output_dir.glob("*.json"))
+    payload = json.loads(output_file.read_text(encoding="utf-8"))
+    assert payload["analysis_info"]["rules_file"] == str(rules_file)
+    assert payload["findings"][0]["rule_id"] == "CUSTOM-001"
 
 
 def test_cli_rejects_invalid_format(tmp_path):

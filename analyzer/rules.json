@@ -1,0 +1,110 @@
+{
+  "rules": [
+    {
+      "rule_id": "SQLI-001",
+      "attack_type": "SQL Injection",
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "source": "request",
+      "evidence_key": "matched_pattern",
+      "description": "SQL Injection 의심 문자열 탐지",
+      "patterns": [
+        "' or",
+        "\" or",
+        " or 1=1",
+        "union select",
+        "--",
+        "#",
+        "sleep(",
+        "benchmark(",
+        "information_schema",
+        "select ",
+        "drop table"
+      ],
+      "reason": "요청 경로 또는 쿼리 문자열에서 SQL Injection 의심 패턴 발견",
+      "response": "입력값 검증, Prepared Statement 사용 여부, WAF 룰을 점검합니다."
+    },
+    {
+      "rule_id": "XSS-001",
+      "attack_type": "XSS",
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "source": "request",
+      "evidence_key": "matched_pattern",
+      "description": "Script 삽입 또는 이벤트 핸들러 기반 XSS 패턴 탐지",
+      "patterns": [
+        "<script",
+        "</script>",
+        "alert(",
+        "onerror=",
+        "onload=",
+        "javascript:",
+        "<img",
+        "<svg"
+      ],
+      "reason": "요청 경로 또는 쿼리 문자열에서 XSS 의심 패턴 발견",
+      "response": "출력 인코딩, 입력값 필터링, CSP 적용 여부를 점검합니다."
+    },
+    {
+      "rule_id": "PATH-001",
+      "attack_type": "Path Traversal",
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "source": "request",
+      "evidence_key": "matched_pattern",
+      "description": "../, /etc/passwd 등 경로 조작 시도 탐지",
+      "patterns": [
+        "../",
+        "..\\",
+        "/etc/passwd",
+        "/etc/shadow",
+        "boot.ini",
+        "win.ini",
+        "/proc/self/environ"
+      ],
+      "reason": "파일 경로 조작 또는 민감 파일 접근 시도 패턴 발견",
+      "response": "파일 경로 입력값 검증, 상위 디렉터리 접근 차단 여부를 확인합니다."
+    },
+    {
+      "rule_id": "ADMIN-001",
+      "attack_type": "Admin Page Access",
+      "severity": "MEDIUM",
+      "confidence": "MEDIUM",
+      "source": "request",
+      "evidence_key": "matched_path",
+      "description": "관리자 페이지 접근 시도 탐지",
+      "patterns": [
+        "/admin",
+        "/administrator",
+        "/wp-admin",
+        "/manager",
+        "/phpmyadmin",
+        "/login/admin"
+      ],
+      "reason": "관리자 페이지 또는 관리 도구 접근 시도 탐지",
+      "response": "관리자 페이지 접근 IP 제한, 인증 정책, 접근 로그를 확인합니다."
+    },
+    {
+      "rule_id": "SCAN-001",
+      "attack_type": "Suspicious User-Agent",
+      "severity": "MEDIUM",
+      "confidence": "MEDIUM",
+      "source": "user_agent",
+      "evidence_key": "matched_user_agent",
+      "description": "sqlmap, nikto, curl 등 자동화 도구 User-Agent 탐지",
+      "patterns": [
+        "sqlmap",
+        "nikto",
+        "nmap",
+        "dirbuster",
+        "gobuster",
+        "wpscan",
+        "curl",
+        "wget",
+        "python-requests"
+      ],
+      "reason": "스캐너 또는 자동화 도구로 의심되는 User-Agent 탐지",
+      "response": "해당 IP의 요청 패턴을 추가 확인하고 필요 시 차단을 검토합니다."
+    }
+  ]
+}
