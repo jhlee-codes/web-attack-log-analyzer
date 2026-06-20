@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import argparse
 import re
 import sys
 from collections import Counter
@@ -603,15 +604,83 @@ def write_markdown_report(
         report.write("- 스캐너 User-Agent 또는 반복 404 탐지 시 자동화된 스캔 여부를 확인합니다.\n")
 
 
-def main():
-    access_log = Path(sys.argv[1]) if len(sys.argv) >= 2 else DEFAULT_ACCESS_LOG
-    login_log = Path(sys.argv[2]) if len(sys.argv) >= 3 else DEFAULT_LOGIN_LOG
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Analyze web access and login logs for suspicious attack patterns."
+    )
+    parser.add_argument(
+        "legacy_access_log",
+        nargs="?",
+        type=Path,
+        help="Access log path. Deprecated: use --access-log.",
+    )
+    parser.add_argument(
+        "legacy_login_log",
+        nargs="?",
+        type=Path,
+        help="Login log path. Deprecated: use --login-log.",
+    )
+    parser.add_argument(
+        "legacy_threshold",
+        nargs="?",
+        type=int,
+        help="Repeated event threshold. Deprecated: use --threshold.",
+    )
+    parser.add_argument(
+        "--access-log",
+        type=Path,
+        default=None,
+        help=f"Access log path. Default: {DEFAULT_ACCESS_LOG}",
+    )
+    parser.add_argument(
+        "--login-log",
+        type=Path,
+        default=None,
+        help=f"Login log path. Default: {DEFAULT_LOGIN_LOG}",
+    )
+    parser.add_argument(
+        "--threshold",
+        type=int,
+        default=None,
+        help=f"Repeated event threshold. Default: {DEFAULT_THRESHOLD}",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=RESULT_DIR,
+        help=f"Directory to save report files. Default: {RESULT_DIR}",
+    )
 
-    try:
-        threshold = int(sys.argv[3]) if len(sys.argv) >= 4 else DEFAULT_THRESHOLD
-    except ValueError:
-        print("Error: threshold는 숫자로 입력해야 합니다.")
-        sys.exit(1)
+    args = parser.parse_args()
+
+    if args.threshold is not None and args.legacy_threshold is not None:
+        parser.error("threshold는 위치 인자와 --threshold 중 하나만 입력해야 합니다.")
+
+    if args.access_log is not None and args.legacy_access_log is not None:
+        parser.error("access log는 위치 인자와 --access-log 중 하나만 입력해야 합니다.")
+
+    if args.login_log is not None and args.legacy_login_log is not None:
+        parser.error("login log는 위치 인자와 --login-log 중 하나만 입력해야 합니다.")
+
+    if args.threshold is not None and args.threshold < 1:
+        parser.error("--threshold는 1 이상의 숫자여야 합니다.")
+
+    if args.legacy_threshold is not None and args.legacy_threshold < 1:
+        parser.error("threshold는 1 이상의 숫자여야 합니다.")
+
+    args.access_log = args.access_log or args.legacy_access_log or DEFAULT_ACCESS_LOG
+    args.login_log = args.login_log or args.legacy_login_log or DEFAULT_LOGIN_LOG
+    args.threshold = args.threshold or args.legacy_threshold or DEFAULT_THRESHOLD
+
+    return args
+
+
+def main():
+    args = parse_args()
+    access_log = args.access_log
+    login_log = args.login_log
+    threshold = args.threshold
+    output_dir = args.output_dir
 
     if not access_log.exists() and not login_log.exists():
         print(f"Error: 분석할 로그 파일이 없습니다.")
@@ -619,11 +688,11 @@ def main():
         print(f"- Login log : {login_log}")
         sys.exit(1)
 
-    RESULT_DIR.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    result_file = RESULT_DIR / f"web_attack_detection_result_{timestamp}.txt"
-    markdown_file = RESULT_DIR / f"web_attack_detection_report_{timestamp}.md"
+    result_file = output_dir / f"web_attack_detection_result_{timestamp}.txt"
+    markdown_file = output_dir / f"web_attack_detection_report_{timestamp}.md"
 
     access_analysis = analyze_access_log(access_log, threshold)
     login_analysis = analyze_login_log(login_log, threshold)
