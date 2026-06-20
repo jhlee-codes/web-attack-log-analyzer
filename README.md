@@ -155,7 +155,7 @@ JSON과 Markdown 리포트에는 전체 위험도, 주요 공격 유형, 주요 
 
 ## 대시보드 확인
 
-Flask 서버를 실행한 뒤 브라우저에서 `/dashboard`로 접속하면 최신 JSON 리포트를 요약 화면으로 확인할 수 있습니다. 대시보드는 요청 수, 탐지 수, Executive Summary, 위험도, 공격 유형, 요청 IP Top 5, Timeline, 최근 탐지 결과, CSV Preview를 표시합니다.
+Flask 서버를 실행한 뒤 브라우저에서 `/dashboard`로 접속하면 현재 `logs/access.log`, `logs/login.log`를 실시간으로 분석한 요약 화면을 확인할 수 있습니다. 대시보드는 요청 수, 탐지 수, Executive Summary, 위험도, 공격 유형, 요청 IP Top 5, Timeline, 최근 탐지 결과, CSV Preview를 표시합니다. 현재 분석 리포트 저장 버튼으로 그 시점의 분석 결과를 TXT, Markdown, JSON, CSV 파일로 저장할 수 있습니다.
 
 ```bash
 python app/app.py
@@ -177,7 +177,7 @@ http://127.0.0.1:5000/upload
 http://127.0.0.1:5000/reports
 ```
 
-대시보드는 `result/web_attack_detection_report_*.json` 중 가장 최신 파일을 기본으로 읽으며, Report 선택 상자에서 이전 JSON 리포트도 확인할 수 있습니다. 같은 타임스탬프의 JSON, Markdown, TXT, CSV 리포트가 있으면 대시보드에서 바로 다운로드할 수 있고, CSV 탐지 결과는 상위 행을 미리보기로 확인할 수 있습니다. JSON 리포트가 없다면 먼저 분석기를 실행합니다.
+Report 선택 상자에서 저장된 JSON 리포트를 고르면 과거 분석 스냅샷도 확인할 수 있습니다. 같은 타임스탬프의 JSON, Markdown, TXT, CSV 리포트가 있으면 대시보드에서 바로 다운로드할 수 있고, CSV 탐지 결과는 상위 행을 미리보기로 확인할 수 있습니다.
 선택한 JSON 리포트가 비어 있거나 형식이 깨진 경우에는 서버 오류 대신 대시보드 상단에 읽기 실패 메시지를 표시합니다.
 
 ```bash

@@ -33,6 +33,17 @@ REPORT_FILE_PATTERN = re.compile(
     r"findings_\d{8}_\d{6}\.csv"
     r")$"
 )
+FINDING_PREVIEW_FIELDS = [
+    "rule_id",
+    "severity",
+    "attack_type",
+    "timestamp",
+    "ip",
+    "method",
+    "path",
+    "status",
+    "evidence",
+]
 
 def setup_logger(logger_name, log_file):
     logger = logging.getLogger(logger_name)
@@ -125,10 +136,25 @@ def delete_report_bundle(filename: str):
             related_file.unlink()
 
 
-def build_csv_preview(report_file: Path | None, limit: int = 20) -> dict:
+def build_findings_preview(findings: list[dict], limit: int = 20) -> dict:
+    return {
+        "filename": "",
+        "headers": FINDING_PREVIEW_FIELDS,
+        "rows": [
+            {field: finding.get(field, "-") for field in FINDING_PREVIEW_FIELDS}
+            for finding in findings[:limit]
+        ],
+        "error": "",
+    }
+
+
+def build_csv_preview(report_file: Path | None, fallback_findings: list[dict] | None = None, limit: int = 20) -> dict:
     csv_file = get_findings_csv_file(report_file)
 
     if csv_file is None or not csv_file.exists():
+        if fallback_findings:
+            return build_findings_preview(fallback_findings, limit)
+
         return {
             "filename": "",
             "headers": [],
@@ -298,9 +324,99 @@ def save_uploaded_file_or_empty(file_storage, destination: Path):
     destination.write_text("", encoding="utf-8")
 
 
-def analyze_uploaded_logs(access_file, login_file, access_format: str, threshold: int) -> str:
+def generate_reports_from_logs(access_log: Path, login_log: Path, access_format: str, threshold: int) -> str:
     RESULT_DIR.mkdir(parents=True, exist_ok=True)
 
+    rules = web_log_analyzer.load_detection_rules(RULES_FILE)
+    access_analysis = web_log_analyzer.analyze_access_log(
+        access_log=access_log,
+        threshold=threshold,
+        rules=rules,
+        access_format=access_format,
+    )
+    login_analysis = web_log_analyzer.analyze_login_log(login_log, threshold)
+    filters = {
+        "severities": set(),
+        "attack_types": set(),
+        "ips": set(),
+    }
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    result_file = RESULT_DIR / f"web_attack_detection_result_{timestamp}.txt"
+    markdown_file = RESULT_DIR / f"web_attack_detection_report_{timestamp}.md"
+    json_file = RESULT_DIR / f"web_attack_detection_report_{timestamp}.json"
+    csv_file = RESULT_DIR / f"web_attack_detection_findings_{timestamp}.csv"
+
+    web_log_analyzer.write_txt_report(
+        result_file=result_file,
+        access_log=access_log,
+        login_log=login_log,
+        rules_file=RULES_FILE,
+        access_format=access_format,
+        filters=filters,
+        threshold=threshold,
+        access_analysis=access_analysis,
+        login_analysis=login_analysis,
+    )
+    web_log_analyzer.write_markdown_report(
+        markdown_file=markdown_file,
+        access_log=access_log,
+        login_log=login_log,
+        rules_file=RULES_FILE,
+        rules=rules,
+        access_format=access_format,
+        filters=filters,
+        threshold=threshold,
+        access_analysis=access_analysis,
+        login_analysis=login_analysis,
+    )
+    web_log_analyzer.write_json_report(
+        json_file=json_file,
+        access_log=access_log,
+        login_log=login_log,
+        rules_file=RULES_FILE,
+        access_format=access_format,
+        filters=filters,
+        threshold=threshold,
+        access_analysis=access_analysis,
+        login_analysis=login_analysis,
+    )
+    web_log_analyzer.write_csv_report(
+        csv_file=csv_file,
+        access_analysis=access_analysis,
+        login_analysis=login_analysis,
+    )
+
+    return json_file.name
+
+
+def build_live_report_payload() -> dict:
+    rules = web_log_analyzer.load_detection_rules(RULES_FILE)
+    access_analysis = web_log_analyzer.analyze_access_log(
+        access_log=ACCESS_LOG_FILE,
+        threshold=web_log_analyzer.DEFAULT_THRESHOLD,
+        rules=rules,
+        access_format="custom",
+    )
+    login_analysis = web_log_analyzer.analyze_login_log(LOGIN_LOG_FILE, web_log_analyzer.DEFAULT_THRESHOLD)
+
+    return web_log_analyzer.build_report_payload(
+        access_log=ACCESS_LOG_FILE,
+        login_log=LOGIN_LOG_FILE,
+        rules_file=RULES_FILE,
+        access_format="custom",
+        filters={
+            "severities": set(),
+            "attack_types": set(),
+            "ips": set(),
+        },
+        threshold=web_log_analyzer.DEFAULT_THRESHOLD,
+        access_analysis=access_analysis,
+        login_analysis=login_analysis,
+    )
+
+
+def analyze_uploaded_logs(access_file, login_file, access_format: str, threshold: int) -> str:
     with TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
         access_log = temp_path / "uploaded_access.log"
@@ -309,67 +425,7 @@ def analyze_uploaded_logs(access_file, login_file, access_format: str, threshold
         save_uploaded_file_or_empty(access_file, access_log)
         save_uploaded_file_or_empty(login_file, login_log)
 
-        rules = web_log_analyzer.load_detection_rules(RULES_FILE)
-        access_analysis = web_log_analyzer.analyze_access_log(
-            access_log=access_log,
-            threshold=threshold,
-            rules=rules,
-            access_format=access_format,
-        )
-        login_analysis = web_log_analyzer.analyze_login_log(login_log, threshold)
-        filters = {
-            "severities": set(),
-            "attack_types": set(),
-            "ips": set(),
-        }
-
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        result_file = RESULT_DIR / f"web_attack_detection_result_{timestamp}.txt"
-        markdown_file = RESULT_DIR / f"web_attack_detection_report_{timestamp}.md"
-        json_file = RESULT_DIR / f"web_attack_detection_report_{timestamp}.json"
-        csv_file = RESULT_DIR / f"web_attack_detection_findings_{timestamp}.csv"
-
-        web_log_analyzer.write_txt_report(
-            result_file=result_file,
-            access_log=access_log,
-            login_log=login_log,
-            rules_file=RULES_FILE,
-            access_format=access_format,
-            filters=filters,
-            threshold=threshold,
-            access_analysis=access_analysis,
-            login_analysis=login_analysis,
-        )
-        web_log_analyzer.write_markdown_report(
-            markdown_file=markdown_file,
-            access_log=access_log,
-            login_log=login_log,
-            rules_file=RULES_FILE,
-            rules=rules,
-            access_format=access_format,
-            filters=filters,
-            threshold=threshold,
-            access_analysis=access_analysis,
-            login_analysis=login_analysis,
-        )
-        web_log_analyzer.write_json_report(
-            json_file=json_file,
-            access_log=access_log,
-            login_log=login_log,
-            rules_file=RULES_FILE,
-            access_format=access_format,
-            filters=filters,
-            threshold=threshold,
-            access_analysis=access_analysis,
-            login_analysis=login_analysis,
-        )
-        web_log_analyzer.write_csv_report(
-            csv_file=csv_file,
-            access_analysis=access_analysis,
-            login_analysis=login_analysis,
-        )
-
-    return json_file.name
+        return generate_reports_from_logs(access_log, login_log, access_format, threshold)
 
 
 def parse_dashboard_filters(args):
@@ -467,6 +523,7 @@ def build_empty_dashboard_data(
     filters: dict,
     report_files: list[Path] | None = None,
     report_file: Path | None = None,
+    mode: str = "live",
     error: str = "",
 ) -> dict:
     risk_counts = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}
@@ -474,6 +531,7 @@ def build_empty_dashboard_data(
     return {
         "report_file": report_file,
         "report_files": report_files or [],
+        "mode": mode,
         "downloads": build_report_downloads(report_file),
         "analysis_info": {},
         "summary": {
@@ -501,25 +559,14 @@ def build_empty_dashboard_data(
     }
 
 
-def load_dashboard_data(filters: dict | None = None, report_name: str = ""):
-    filters = filters or {"severity": "", "attack_type": "", "ip": ""}
-    report_files = get_json_reports()
-    report_file = get_selected_json_report(report_name)
-
-    if report_file is None:
-        return build_empty_dashboard_data(filters)
-
-    try:
-        with report_file.open("r", encoding="utf-8") as file:
-            payload = json.load(file)
-    except (OSError, json.JSONDecodeError) as error:
-        return build_empty_dashboard_data(
-            filters=filters,
-            report_files=report_files,
-            report_file=report_file,
-            error=f"JSON 리포트를 읽을 수 없습니다: {error}",
-        )
-
+def build_dashboard_data_from_payload(
+    payload: dict,
+    filters: dict,
+    report_files: list[Path],
+    report_file: Path | None,
+    mode: str,
+    error: str = "",
+) -> dict:
     all_findings = payload.get("findings", [])
     findings = [
         finding
@@ -540,6 +587,7 @@ def load_dashboard_data(filters: dict | None = None, report_name: str = ""):
     return {
         "report_file": report_file,
         "report_files": report_files,
+        "mode": mode,
         "downloads": build_report_downloads(report_file),
         "analysis_info": payload.get("analysis_info", {}),
         "summary": summary,
@@ -554,9 +602,61 @@ def load_dashboard_data(filters: dict | None = None, report_name: str = ""):
         "share_path": build_dashboard_share_path(filters, report_file),
         "timeline": timeline,
         "recent_findings": findings[-20:][::-1],
-        "csv_preview": build_csv_preview(report_file),
-        "error": "",
+        "csv_preview": build_csv_preview(report_file, fallback_findings=findings if mode == "live" else None),
+        "error": error,
     }
+
+
+def load_dashboard_data(filters: dict | None = None, report_name: str = ""):
+    filters = filters or {"severity": "", "attack_type": "", "ip": ""}
+    external_error = request.args.get("error", "").strip()
+    report_files = get_json_reports()
+
+    if report_name:
+        report_file = get_selected_json_report(report_name)
+
+        if report_file is None:
+            return build_empty_dashboard_data(filters, report_files=report_files, mode="saved", error=external_error)
+
+        try:
+            with report_file.open("r", encoding="utf-8") as file:
+                payload = json.load(file)
+        except (OSError, json.JSONDecodeError) as error:
+            return build_empty_dashboard_data(
+                filters=filters,
+                report_files=report_files,
+                report_file=report_file,
+                mode="saved",
+                error=f"JSON 리포트를 읽을 수 없습니다: {error}",
+            )
+
+        return build_dashboard_data_from_payload(
+            payload=payload,
+            filters=filters,
+            report_files=report_files,
+            report_file=report_file,
+            mode="saved",
+            error=external_error,
+        )
+
+    try:
+        payload = build_live_report_payload()
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        return build_empty_dashboard_data(
+            filters=filters,
+            report_files=report_files,
+            mode="live",
+            error=str(error),
+        )
+
+    return build_dashboard_data_from_payload(
+        payload=payload,
+        filters=filters,
+        report_files=report_files,
+        report_file=None,
+        mode="live",
+        error=external_error,
+    )
 
 
 def build_count_chart(counts: dict, limit: int | None = None) -> list[dict]:
@@ -633,6 +733,21 @@ def reports():
 def delete_report():
     delete_report_bundle(request.form.get("filename", "").strip())
     return redirect(url_for("reports"))
+
+
+@app.route("/reports/generate", methods=["POST"])
+def generate_report():
+    try:
+        report_name = generate_reports_from_logs(
+            access_log=ACCESS_LOG_FILE,
+            login_log=LOGIN_LOG_FILE,
+            access_format="custom",
+            threshold=web_log_analyzer.DEFAULT_THRESHOLD,
+        )
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        return redirect(url_for("dashboard", error=str(error)))
+
+    return redirect(url_for("dashboard", report=report_name))
 
 
 @app.route("/upload", methods=["GET", "POST"])

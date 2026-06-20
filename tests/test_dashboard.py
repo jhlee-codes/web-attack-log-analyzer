@@ -278,15 +278,80 @@ def test_rules_page_handles_invalid_rules_file(tmp_path, monkeypatch):
     assert "표시할 탐지 룰이 없습니다." in body
 
 
-def test_dashboard_renders_without_json_report(tmp_path, monkeypatch):
+def test_dashboard_renders_live_analysis_from_current_logs(tmp_path, monkeypatch):
     monkeypatch.setattr(app_module, "RESULT_DIR", tmp_path)
+    access_log = tmp_path / "access.log"
+    login_log = tmp_path / "login.log"
+    access_log.write_text(
+        '2026-06-20 10:00:00 HTTP_REQUEST ip=10.0.0.1 method=GET '
+        'path="/login" query="id=1%27%20OR%20%271%27%3D%271" '
+        'status=200 user_agent="Mozilla/5.0"\n',
+        encoding="utf-8",
+    )
+    login_log.write_text("", encoding="utf-8")
+    monkeypatch.setattr(app_module, "ACCESS_LOG_FILE", access_log)
+    monkeypatch.setattr(app_module, "LOGIN_LOG_FILE", login_log)
     monkeypatch.setattr(app_module.access_logger, "info", lambda message: None)
 
     client = app_module.app.test_client()
     response = client.get("/dashboard")
+    body = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert "JSON 리포트 없음" in response.get_data(as_text=True)
+    assert "실시간 분석" in body
+    assert "SQLI-001" in body
+    assert "CSV Preview" in body
+
+
+def test_dashboard_renders_generate_report_button(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "RESULT_DIR", tmp_path)
+    access_log = tmp_path / "access.log"
+    login_log = tmp_path / "login.log"
+    access_log.write_text("", encoding="utf-8")
+    login_log.write_text("", encoding="utf-8")
+    monkeypatch.setattr(app_module, "ACCESS_LOG_FILE", access_log)
+    monkeypatch.setattr(app_module, "LOGIN_LOG_FILE", login_log)
+    monkeypatch.setattr(app_module.access_logger, "info", lambda message: None)
+
+    client = app_module.app.test_client()
+    response = client.get("/dashboard")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert 'action="/reports/generate"' in body
+    assert "현재 분석 리포트 저장" in body
+
+
+def test_generate_report_from_current_logs_redirects_to_dashboard(tmp_path, monkeypatch):
+    result_dir = tmp_path / "result"
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    access_log = log_dir / "access.log"
+    login_log = log_dir / "login.log"
+    access_log.write_text(
+        '2026-06-20 10:00:00 HTTP_REQUEST ip=10.0.0.1 method=GET '
+        'path="/login" query="id=1%27%20OR%20%271%27%3D%271" '
+        'status=200 user_agent="Mozilla/5.0"\n',
+        encoding="utf-8",
+    )
+    login_log.write_text("", encoding="utf-8")
+    monkeypatch.setattr(app_module, "RESULT_DIR", result_dir)
+    monkeypatch.setattr(app_module, "ACCESS_LOG_FILE", access_log)
+    monkeypatch.setattr(app_module, "LOGIN_LOG_FILE", login_log)
+    monkeypatch.setattr(app_module.access_logger, "info", lambda message: None)
+
+    client = app_module.app.test_client()
+    response = client.post("/reports/generate")
+
+    assert response.status_code == 302
+    assert "/dashboard?report=web_attack_detection_report_" in response.headers["Location"]
+
+    json_report = next(result_dir.glob("web_attack_detection_report_*.json"))
+    payload = json.loads(json_report.read_text(encoding="utf-8"))
+    assert payload["findings"][0]["rule_id"] == "SQLI-001"
+    assert next(result_dir.glob("web_attack_detection_report_*.md")).is_file()
+    assert next(result_dir.glob("web_attack_detection_result_*.txt")).is_file()
+    assert next(result_dir.glob("web_attack_detection_findings_*.csv")).is_file()
 
 
 def test_dashboard_renders_latest_json_report(tmp_path, monkeypatch):
@@ -357,7 +422,7 @@ def test_dashboard_renders_latest_json_report(tmp_path, monkeypatch):
     )
 
     client = app_module.app.test_client()
-    response = client.get("/dashboard")
+    response = client.get(f"/dashboard?report={report_file.name}")
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
@@ -416,7 +481,7 @@ def test_dashboard_renders_executive_summary(tmp_path, monkeypatch):
     )
 
     client = app_module.app.test_client()
-    response = client.get("/dashboard")
+    response = client.get(f"/dashboard?report={report_file.name}")
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
@@ -463,7 +528,7 @@ def test_dashboard_renders_report_download_links(tmp_path, monkeypatch):
     csv_file.write_text("rule_id,severity\nSQLI-001,HIGH\n", encoding="utf-8")
 
     client = app_module.app.test_client()
-    response = client.get("/dashboard")
+    response = client.get(f"/dashboard?report={report_file.name}")
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
@@ -511,7 +576,7 @@ def test_dashboard_renders_csv_preview(tmp_path, monkeypatch):
     )
 
     client = app_module.app.test_client()
-    response = client.get("/dashboard")
+    response = client.get(f"/dashboard?report={report_file.name}")
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
@@ -657,7 +722,7 @@ def test_dashboard_handles_invalid_json_report(tmp_path, monkeypatch):
     report_file.write_text("{invalid json", encoding="utf-8")
 
     client = app_module.app.test_client()
-    response = client.get("/dashboard")
+    response = client.get(f"/dashboard?report={report_file.name}")
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
@@ -734,7 +799,9 @@ def test_dashboard_filters_findings_by_query_parameters(tmp_path, monkeypatch):
     )
 
     client = app_module.app.test_client()
-    response = client.get("/dashboard?severity=HIGH&attack_type=SQL%20Injection")
+    response = client.get(
+        f"/dashboard?report={report_file.name}&severity=HIGH&attack_type=SQL%20Injection"
+    )
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200

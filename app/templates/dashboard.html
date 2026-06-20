@@ -429,7 +429,10 @@
         <div class="wrap topbar">
             <h1>Web Attack Log Dashboard</h1>
             <div class="meta">
-                {% if dashboard.report_file %}
+                {% if dashboard.mode == "live" %}
+                    <div>실시간 분석</div>
+                    <div>{{ dashboard.analysis_info.analysis_time }}</div>
+                {% elif dashboard.report_file %}
                     <div>{{ dashboard.report_file.name }}</div>
                     <div>{{ dashboard.analysis_info.analysis_time }}</div>
                 {% else %}
@@ -444,16 +447,13 @@
             <div class="notice">
                 {{ dashboard.error }}
             </div>
-        {% elif not dashboard.report_file %}
-            <div class="notice">
-                아직 분석 JSON 리포트가 없습니다. `python analyzer/web_log_analyzer.py --format json` 명령으로 리포트를 생성한 뒤 새로고침하세요.
-            </div>
         {% endif %}
 
         <form class="filters" method="GET" action="/dashboard">
             <div class="field">
                 <label for="report">Report</label>
                 <select id="report" name="report">
+                    <option value="" {% if dashboard.mode == "live" %}selected{% endif %}>실시간 분석</option>
                     {% for report_file in dashboard.report_files %}
                         <option value="{{ report_file.name }}" {% if dashboard.report_file and dashboard.report_file.name == report_file.name %}selected{% endif %}>{{ report_file.name }}</option>
                     {% endfor %}
@@ -495,6 +495,15 @@
         <div class="share-link">
             <strong>현재 보기 링크</strong>
             <a href="{{ dashboard.share_path }}">{{ dashboard.share_path }}</a>
+        </div>
+
+        <div class="download-links">
+            <strong>분석 실행</strong>
+            <div class="download-list">
+                <form method="POST" action="/reports/generate">
+                    <button class="button" type="submit">현재 분석 리포트 저장</button>
+                </form>
+            </div>
         </div>
 
         {% if dashboard.downloads %}
