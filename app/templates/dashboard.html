@@ -127,6 +127,21 @@
             text-decoration: underline;
         }
 
+        .download-links {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: -8px 0 18px;
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .download-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
         .button {
             display: inline-flex;
             align-items: center;
@@ -401,6 +416,11 @@
                 align-items: flex-start;
                 flex-direction: column;
             }
+
+            .download-links {
+                align-items: flex-start;
+                flex-direction: column;
+            }
         }
     </style>
 </head>
@@ -476,6 +496,17 @@
             <strong>현재 보기 링크</strong>
             <a href="{{ dashboard.share_path }}">{{ dashboard.share_path }}</a>
         </div>
+
+        {% if dashboard.downloads %}
+            <div class="download-links">
+                <strong>리포트 다운로드</strong>
+                <div class="download-list">
+                    {% for download in dashboard.downloads %}
+                        <a class="button secondary" href="{{ download.url }}">{{ download.label }}</a>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
 
         <div class="stats">
             <div class="stat">

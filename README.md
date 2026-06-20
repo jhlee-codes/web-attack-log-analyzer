@@ -163,11 +163,11 @@ python app/app.py
 http://127.0.0.1:5000/dashboard
 ```
 
-대시보드는 `result/web_attack_detection_report_*.json` 중 가장 최신 파일을 기본으로 읽으며, Report 선택 상자에서 이전 JSON 리포트도 확인할 수 있습니다. JSON 리포트가 없다면 먼저 분석기를 실행합니다.
+대시보드는 `result/web_attack_detection_report_*.json` 중 가장 최신 파일을 기본으로 읽으며, Report 선택 상자에서 이전 JSON 리포트도 확인할 수 있습니다. 같은 타임스탬프의 JSON, Markdown, TXT 리포트가 있으면 대시보드에서 바로 다운로드할 수 있습니다. JSON 리포트가 없다면 먼저 분석기를 실행합니다.
 선택한 JSON 리포트가 비어 있거나 형식이 깨진 경우에는 서버 오류 대신 대시보드 상단에 읽기 실패 메시지를 표시합니다.
 
 ```bash
-python analyzer/web_log_analyzer.py --format json
+python analyzer/web_log_analyzer.py --format all
 ```
 
 대시보드에서도 필터를 적용할 수 있습니다.

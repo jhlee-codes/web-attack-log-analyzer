@@ -158,6 +158,74 @@ def test_dashboard_renders_executive_summary(tmp_path, monkeypatch):
     assert "WAF 룰과 입력값 검증을 우선 점검합니다." in body
 
 
+def test_dashboard_renders_report_download_links(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "RESULT_DIR", tmp_path)
+    monkeypatch.setattr(app_module.access_logger, "info", lambda message: None)
+    report_file = tmp_path / "web_attack_detection_report_20260620_160000.json"
+    markdown_file = tmp_path / "web_attack_detection_report_20260620_160000.md"
+    txt_file = tmp_path / "web_attack_detection_result_20260620_160000.txt"
+    report_file.write_text(
+        json.dumps(
+            {
+                "analysis_info": {
+                    "analysis_time": "2026-06-20 16:00:00",
+                },
+                "summary": {
+                    "total_requests": 1,
+                    "total_login_events": 0,
+                    "total_findings": 0,
+                    "suspicious_ip_count": 0,
+                    "risk_counts": {"HIGH": 0, "MEDIUM": 0, "LOW": 0},
+                },
+                "statistics": {
+                    "suspicious_ips": [],
+                    "request_count_by_ip": {},
+                },
+                "timeline": [],
+                "findings": [],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    markdown_file.write_text("# report", encoding="utf-8")
+    txt_file.write_text("report", encoding="utf-8")
+
+    client = app_module.app.test_client()
+    response = client.get("/dashboard")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "리포트 다운로드" in body
+    assert "/reports/web_attack_detection_report_20260620_160000.json" in body
+    assert "/reports/web_attack_detection_report_20260620_160000.md" in body
+    assert "/reports/web_attack_detection_result_20260620_160000.txt" in body
+
+
+def test_report_download_route_serves_allowed_report_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "RESULT_DIR", tmp_path)
+    monkeypatch.setattr(app_module.access_logger, "info", lambda message: None)
+    report_file = tmp_path / "web_attack_detection_report_20260620_160000.json"
+    report_file.write_text('{"ok": true}', encoding="utf-8")
+
+    client = app_module.app.test_client()
+    response = client.get(f"/reports/{report_file.name}")
+
+    assert response.status_code == 200
+    assert response.headers["Content-Disposition"].startswith("attachment;")
+    assert response.get_data(as_text=True) == '{"ok": true}'
+
+
+def test_report_download_route_rejects_unexpected_filename(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "RESULT_DIR", tmp_path)
+    monkeypatch.setattr(app_module.access_logger, "info", lambda message: None)
+
+    client = app_module.app.test_client()
+    response = client.get("/reports/../app.py")
+
+    assert response.status_code == 404
+
+
 def test_dashboard_can_select_report_file(tmp_path, monkeypatch):
     monkeypatch.setattr(app_module, "RESULT_DIR", tmp_path)
     monkeypatch.setattr(app_module.access_logger, "info", lambda message: None)

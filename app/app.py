@@ -1,9 +1,10 @@
-from flask import Flask, render_template, request
+from flask import Flask, abort, render_template, request, send_from_directory
 from pathlib import Path
 from collections import Counter
 from urllib.parse import urlencode
 import json
 import logging
+import re
 
 app = Flask(__name__)
 
@@ -17,6 +18,9 @@ RESULT_DIR = PROJECT_ROOT / "result"
 
 LOGIN_LOG_FILE = LOG_DIR / "login.log"
 ACCESS_LOG_FILE = LOG_DIR / "access.log"
+REPORT_FILE_PATTERN = re.compile(
+    r"^web_attack_detection_(?:report|result)_\d{8}_\d{6}\.(?:json|md|txt)$"
+)
 
 def setup_logger(logger_name, log_file):
     logger = logging.getLogger(logger_name)
@@ -51,6 +55,28 @@ def get_selected_json_report(report_name: str = ""):
                 return report_file
 
     return report_files[0]
+
+
+def build_report_downloads(report_file: Path | None) -> list[dict]:
+    if report_file is None:
+        return []
+
+    timestamp = report_file.stem.removeprefix("web_attack_detection_report_")
+    candidates = [
+        ("JSON", RESULT_DIR / f"web_attack_detection_report_{timestamp}.json"),
+        ("Markdown", RESULT_DIR / f"web_attack_detection_report_{timestamp}.md"),
+        ("TXT", RESULT_DIR / f"web_attack_detection_result_{timestamp}.txt"),
+    ]
+
+    return [
+        {
+            "label": label,
+            "filename": candidate.name,
+            "url": f"/reports/{candidate.name}",
+        }
+        for label, candidate in candidates
+        if candidate.exists()
+    ]
 
 
 def parse_dashboard_filters(args):
@@ -155,6 +181,7 @@ def build_empty_dashboard_data(
     return {
         "report_file": report_file,
         "report_files": report_files or [],
+        "downloads": build_report_downloads(report_file),
         "analysis_info": {},
         "summary": {
             "total_requests": 0,
@@ -219,6 +246,7 @@ def load_dashboard_data(filters: dict | None = None, report_name: str = ""):
     return {
         "report_file": report_file,
         "report_files": report_files,
+        "downloads": build_report_downloads(report_file),
         "analysis_info": payload.get("analysis_info", {}),
         "summary": summary,
         "executive_summary": normalize_executive_summary(payload.get("executive_summary")),
@@ -294,6 +322,19 @@ def dashboard():
     filters = parse_dashboard_filters(request.args)
     report_name = request.args.get("report", "").strip()
     return render_template("dashboard.html", dashboard=load_dashboard_data(filters, report_name))
+
+
+@app.route("/reports/<path:filename>")
+def download_report(filename):
+    if not REPORT_FILE_PATTERN.fullmatch(filename):
+        abort(404)
+
+    report_file = RESULT_DIR / filename
+
+    if not report_file.is_file():
+        abort(404)
+
+    return send_from_directory(RESULT_DIR, filename, as_attachment=True)
 
 
 @app.route("/login", methods=["GET", "POST"])
