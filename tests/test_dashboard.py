@@ -77,6 +77,63 @@ def test_upload_requires_at_least_one_log_file(tmp_path, monkeypatch):
     assert not list(tmp_path.iterdir())
 
 
+def test_reports_page_renders_report_history(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "RESULT_DIR", tmp_path)
+    monkeypatch.setattr(app_module.access_logger, "info", lambda message: None)
+    report_file = tmp_path / "web_attack_detection_report_20260620_160000.json"
+    markdown_file = tmp_path / "web_attack_detection_report_20260620_160000.md"
+    csv_file = tmp_path / "web_attack_detection_findings_20260620_160000.csv"
+    report_file.write_text(
+        json.dumps(
+            {
+                "analysis_info": {
+                    "analysis_time": "2026-06-20 16:00:00",
+                },
+                "summary": {
+                    "total_findings": 3,
+                    "suspicious_ip_count": 2,
+                },
+                "executive_summary": {
+                    "overall_risk": "HIGH",
+                },
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    markdown_file.write_text("# report", encoding="utf-8")
+    csv_file.write_text("rule_id,severity\nSQLI-001,HIGH\n", encoding="utf-8")
+
+    client = app_module.app.test_client()
+    response = client.get("/reports")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Report History" in body
+    assert report_file.name in body
+    assert "2026-06-20 16:00:00" in body
+    assert "HIGH" in body
+    assert "/dashboard?report=web_attack_detection_report_20260620_160000.json" in body
+    assert "/reports/web_attack_detection_report_20260620_160000.md" in body
+    assert "/reports/web_attack_detection_findings_20260620_160000.csv" in body
+
+
+def test_reports_page_marks_invalid_json_report(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "RESULT_DIR", tmp_path)
+    monkeypatch.setattr(app_module.access_logger, "info", lambda message: None)
+    report_file = tmp_path / "web_attack_detection_report_20260620_160000.json"
+    report_file.write_text("{invalid json", encoding="utf-8")
+
+    client = app_module.app.test_client()
+    response = client.get("/reports")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert report_file.name in body
+    assert "ERROR" in body
+    assert "JSON 리포트를 읽을 수 없습니다" in body
+
+
 def test_rules_page_renders_detection_rules(tmp_path, monkeypatch):
     rules_file = tmp_path / "rules.json"
     rules_file.write_text(

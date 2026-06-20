@@ -89,6 +89,39 @@ def build_report_downloads(report_file: Path | None) -> list[dict]:
     ]
 
 
+def build_report_history() -> list[dict]:
+    history = []
+
+    for report_file in get_json_reports():
+        row = {
+            "filename": report_file.name,
+            "analysis_time": "-",
+            "overall_risk": "ERROR",
+            "total_findings": "-",
+            "suspicious_ip_count": "-",
+            "dashboard_url": url_for("dashboard", report=report_file.name),
+            "downloads": build_report_downloads(report_file),
+            "error": "",
+        }
+
+        try:
+            with report_file.open("r", encoding="utf-8") as file:
+                payload = json.load(file)
+        except (OSError, json.JSONDecodeError) as error:
+            row["error"] = f"JSON 리포트를 읽을 수 없습니다: {error}"
+        else:
+            summary = payload.get("summary", {})
+            executive_summary = normalize_executive_summary(payload.get("executive_summary"))
+            row["analysis_time"] = payload.get("analysis_info", {}).get("analysis_time", "-")
+            row["overall_risk"] = executive_summary["overall_risk"]
+            row["total_findings"] = summary.get("total_findings", 0)
+            row["suspicious_ip_count"] = summary.get("suspicious_ip_count", 0)
+
+        history.append(row)
+
+    return history
+
+
 def load_detection_rules_for_view() -> dict:
     try:
         with RULES_FILE.open("r", encoding="utf-8") as file:
@@ -462,6 +495,11 @@ def dashboard():
 @app.route("/rules")
 def rules():
     return render_template("rules.html", rules_view=load_detection_rules_for_view())
+
+
+@app.route("/reports")
+def reports():
+    return render_template("reports.html", reports=build_report_history())
 
 
 @app.route("/upload", methods=["GET", "POST"])
