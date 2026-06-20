@@ -111,6 +111,8 @@ def test_cli_format_json_creates_only_json_report(tmp_path):
     assert payload["summary"]["total_findings"] == 1
     assert payload["analysis_info"]["rules_file"].endswith("rules.json")
     assert payload["findings"][0]["rule_id"] == "SQLI-001"
+    assert payload["timeline"][0]["rule_id"] == "SQLI-001"
+    assert all(item["timestamp"] != "-" for item in payload["timeline"])
 
 
 def test_cli_uses_custom_rules_file(tmp_path):
@@ -285,6 +287,46 @@ def test_cli_filters_findings_by_attack_type(tmp_path):
     assert payload["analysis_info"]["filters"]["attack_types"] == ["SQL Injection"]
     assert payload["findings"]
     assert {finding["attack_type"] for finding in payload["findings"]} == {"SQL Injection"}
+
+
+def test_cli_markdown_report_includes_timeline_section(tmp_path):
+    access_log = tmp_path / "access.log"
+    login_log = tmp_path / "login.log"
+    output_dir = tmp_path / "result"
+    write_lines(
+        access_log,
+        [
+            '2026-06-20 10:00:00 HTTP_REQUEST ip=10.0.0.1 method=GET path="/login" query="id=1%27%20OR%20%271%27%3D%271" status=200 user_agent="Mozilla/5.0"',
+        ],
+    )
+    write_lines(login_log, [])
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(ANALYZER_SCRIPT),
+            "--access-log",
+            str(access_log),
+            "--login-log",
+            str(login_log),
+            "--format",
+            "md",
+            "--output-dir",
+            str(output_dir),
+        ],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0
+
+    output_file = next(output_dir.glob("*.md"))
+    report = output_file.read_text(encoding="utf-8")
+    assert "## 3. Timeline" in report
+    assert "SQLI-001" in report
+    assert "2026-06-20 10:00:00" in report
 
 
 def test_cli_rejects_invalid_format(tmp_path):

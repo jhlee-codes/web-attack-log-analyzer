@@ -545,6 +545,27 @@ def serialize_filters(filters: dict) -> dict:
     }
 
 
+def build_timeline(findings: list[dict]) -> list[dict]:
+    timeline = [
+        {
+            "timestamp": finding["timestamp"],
+            "rule_id": finding["rule_id"],
+            "attack_type": finding["attack_type"],
+            "severity": finding["severity"],
+            "ip": finding["ip"],
+            "method": finding["method"],
+            "path": finding["path"],
+            "query": finding["query"],
+            "status": finding["status"],
+            "evidence": finding["evidence"],
+        }
+        for finding in findings
+        if finding["timestamp"] != "-"
+    ]
+
+    return sorted(timeline, key=lambda item: item["timestamp"])
+
+
 def build_report_payload(
     access_log: Path,
     login_log: Path,
@@ -558,6 +579,7 @@ def build_report_payload(
     findings = access_analysis["findings"] + login_analysis["findings"]
     risk_counts = get_risk_counts(findings)
     suspicious_ips = sorted({item["ip"] for item in findings if item["ip"] != "-"})
+    timeline = build_timeline(findings)
 
     return {
         "analysis_info": {
@@ -585,6 +607,7 @@ def build_report_payload(
             "login_fail_by_ip": dict(login_analysis["login_fail_by_ip"]),
             "login_success_by_ip": dict(login_analysis["login_success_by_ip"]),
         },
+        "timeline": timeline,
         "findings": findings,
     }
 
@@ -707,6 +730,7 @@ def write_markdown_report(
     findings = access_analysis["findings"] + login_analysis["findings"]
     risk_counts = get_risk_counts(findings)
     suspicious_ips = sorted({item["ip"] for item in findings if item["ip"] != "-"})
+    timeline = build_timeline(findings)
 
     with markdown_file.open("w", encoding="utf-8") as report:
         report.write("# Web Attack Log Analysis Report\n\n")
@@ -734,7 +758,26 @@ def write_markdown_report(
         report.write(f"| HIGH 위험도 | {risk_counts['HIGH']} |\n")
         report.write(f"| MEDIUM 위험도 | {risk_counts['MEDIUM']} |\n\n")
 
-        report.write("## 3. Detection Results\n\n")
+        report.write("## 3. Timeline\n\n")
+        report.write("| Time | Severity | Rule ID | Attack Type | IP | Method | Path | Evidence |\n")
+        report.write("|---|---|---|---|---|---|---|---|\n")
+
+        if timeline:
+            for item in timeline:
+                report.write(
+                    f"| {sanitize_markdown(item['timestamp'])} "
+                    f"| {sanitize_markdown(item['severity'])} "
+                    f"| {sanitize_markdown(item['rule_id'])} "
+                    f"| {sanitize_markdown(item['attack_type'])} "
+                    f"| {sanitize_markdown(item['ip'])} "
+                    f"| {sanitize_markdown(item['method'])} "
+                    f"| {sanitize_markdown(item['path'])} "
+                    f"| {sanitize_markdown(item['evidence'])} |\n"
+                )
+        else:
+            report.write("| - | INFO | - | 타임라인 이벤트 없음 | - | - | - | timestamp가 있는 탐지 이벤트 없음 |\n")
+
+        report.write("\n## 4. Detection Results\n\n")
         report.write(
             "| Rule ID | Severity | Confidence | Source Log | Attack Type | Time | IP | Method | Path | Query | Status | User-Agent | Evidence | Reason | Recommended Response |\n"
         )
@@ -762,7 +805,7 @@ def write_markdown_report(
         else:
             report.write("| INFO-000 | INFO | HIGH | - | 정상 | - | - | - | - | - | - | - | - | 탐지된 웹 공격 의심 이벤트 없음 | 추가 조치 불필요 |\n")
 
-        report.write("\n## 4. Detection Rule Summary\n\n")
+        report.write("\n## 5. Detection Rule Summary\n\n")
         report.write("| Rule ID | Rule | Severity | Confidence | Description |\n")
         report.write("|---|---|---|---|---|\n")
         for rule in rules + BUILTIN_RULE_SUMMARY:
@@ -775,7 +818,7 @@ def write_markdown_report(
             )
         report.write("\n")
 
-        report.write("## 5. Recommended Response Guide\n\n")
+        report.write("## 6. Recommended Response Guide\n\n")
         report.write("- SQL Injection 탐지 시 입력값 검증과 DB 쿼리 처리 방식을 확인합니다.\n")
         report.write("- XSS 탐지 시 출력 인코딩, 입력값 필터링, CSP 적용 여부를 확인합니다.\n")
         report.write("- Path Traversal 탐지 시 파일 경로 입력값 검증과 접근 제한을 확인합니다.\n")
