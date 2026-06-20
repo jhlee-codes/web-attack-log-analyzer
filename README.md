@@ -100,6 +100,7 @@ python analyzer/web_log_analyzer.py \
 
 ```text
 --access-log   Access 로그 파일 경로
+--access-format Access 로그 포맷: custom, nginx
 --login-log    Login 로그 파일 경로
 --threshold    반복 이벤트 탐지 기준
 --format       출력 포맷: txt, md, json, all
@@ -120,6 +121,7 @@ python analyzer/web_log_analyzer.py --rules-file analyzer/rules.json
 python analyzer/web_log_analyzer.py --severity HIGH --format json
 python analyzer/web_log_analyzer.py --attack-type "SQL Injection" --format md
 python analyzer/web_log_analyzer.py --ip 127.0.0.1 --format json
+python analyzer/web_log_analyzer.py --access-log logs/nginx_access.log --access-format nginx --format json
 ```
 
 ## 리포트 출력

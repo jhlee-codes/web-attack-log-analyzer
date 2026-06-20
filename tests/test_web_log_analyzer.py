@@ -33,6 +33,22 @@ def test_analyze_access_log_detects_attack_rule_ids(tmp_path):
     assert {"SQLI-001", "XSS-001", "PATH-001"}.issubset(rule_ids)
 
 
+def test_analyze_nginx_access_log_detects_attack_rule_ids(tmp_path):
+    access_log = tmp_path / "nginx_access.log"
+    write_lines(
+        access_log,
+        [
+            '10.0.0.1 - - [20/Jun/2026:10:00:00 +0900] "GET /login?id=1%27%20OR%20%271%27%3D%271 HTTP/1.1" 200 123 "-" "Mozilla/5.0"',
+            '10.0.0.2 - - [20/Jun/2026:10:00:01 +0900] "GET /search?q=%3Cscript%3Ealert(1)%3C%2Fscript%3E HTTP/1.1" 404 123 "-" "Mozilla/5.0"',
+        ],
+    )
+
+    result = web_log_analyzer.analyze_access_log(access_log, threshold=5, access_format="nginx")
+    rule_ids = {finding["rule_id"] for finding in result["findings"]}
+
+    assert {"SQLI-001", "XSS-001"}.issubset(rule_ids)
+
+
 def test_analyze_login_log_detects_repeated_failures_and_success(tmp_path):
     login_log = tmp_path / "login.log"
     write_lines(
@@ -159,6 +175,47 @@ def test_cli_uses_custom_rules_file(tmp_path):
     payload = json.loads(output_file.read_text(encoding="utf-8"))
     assert payload["analysis_info"]["rules_file"] == str(rules_file)
     assert payload["findings"][0]["rule_id"] == "CUSTOM-001"
+
+
+def test_cli_uses_nginx_access_format(tmp_path):
+    access_log = tmp_path / "nginx_access.log"
+    login_log = tmp_path / "login.log"
+    output_dir = tmp_path / "result"
+    write_lines(
+        access_log,
+        [
+            '10.0.0.1 - - [20/Jun/2026:10:00:00 +0900] "GET /login?id=1%27%20OR%20%271%27%3D%271 HTTP/1.1" 200 123 "-" "Mozilla/5.0"',
+        ],
+    )
+    write_lines(login_log, [])
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(ANALYZER_SCRIPT),
+            "--access-log",
+            str(access_log),
+            "--access-format",
+            "nginx",
+            "--login-log",
+            str(login_log),
+            "--format",
+            "json",
+            "--output-dir",
+            str(output_dir),
+        ],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0
+
+    output_file = next(output_dir.glob("*.json"))
+    payload = json.loads(output_file.read_text(encoding="utf-8"))
+    assert payload["analysis_info"]["access_format"] == "nginx"
+    assert payload["findings"][0]["rule_id"] == "SQLI-001"
 
 
 def test_cli_filters_findings_by_severity(tmp_path):

@@ -7,7 +7,7 @@ import sys
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import unquote_plus
+from urllib.parse import unquote_plus, urlsplit
 
 
 DEFAULT_ACCESS_LOG = Path("logs/access.log")
@@ -17,6 +17,7 @@ RESULT_DIR = Path("result")
 DEFAULT_RULES_FILE = Path(__file__).resolve().parent / "rules.json"
 SUPPORTED_REPORT_FORMATS = {"txt", "md", "json"}
 SUPPORTED_SEVERITIES = {"HIGH", "MEDIUM", "LOW"}
+SUPPORTED_ACCESS_FORMATS = {"custom", "nginx"}
 
 
 ACCESS_LOG_PATTERN = re.compile(
@@ -28,6 +29,15 @@ ACCESS_LOG_PATTERN = re.compile(
     r'query="(?P<query>.*?)" '
     r'status=(?P<status>\d{3}) '
     r'user_agent="(?P<user_agent>.*?)"$'
+)
+
+NGINX_ACCESS_LOG_PATTERN = re.compile(
+    r'^(?P<ip>\S+) \S+ \S+ '
+    r'\[(?P<timestamp>[^\]]+)\] '
+    r'"(?P<method>\S+) (?P<request_target>\S+) HTTP/[^"]+" '
+    r'(?P<status>\d{3}) \S+ '
+    r'"(?P<referer>[^"]*)" '
+    r'"(?P<user_agent>[^"]*)"$'
 )
 
 LOGIN_LOG_PATTERN = re.compile(
@@ -64,7 +74,7 @@ BUILTIN_RULE_SUMMARY = [
 ]
 
 
-def parse_access_log_line(line: str):
+def parse_custom_access_log_line(line: str):
     match = ACCESS_LOG_PATTERN.search(line.strip())
 
     if not match:
@@ -79,6 +89,36 @@ def parse_access_log_line(line: str):
         "status": int(match.group("status")),
         "user_agent": match.group("user_agent"),
     }
+
+
+def parse_nginx_access_log_line(line: str):
+    match = NGINX_ACCESS_LOG_PATTERN.search(line.strip())
+
+    if not match:
+        return None
+
+    request_target = match.group("request_target")
+    parsed_target = urlsplit(request_target)
+
+    return {
+        "timestamp": match.group("timestamp"),
+        "ip": match.group("ip"),
+        "method": match.group("method"),
+        "path": parsed_target.path or request_target,
+        "query": parsed_target.query,
+        "status": int(match.group("status")),
+        "user_agent": match.group("user_agent"),
+    }
+
+
+def parse_access_log_line(line: str, access_format: str = "custom"):
+    if access_format == "custom":
+        return parse_custom_access_log_line(line)
+
+    if access_format == "nginx":
+        return parse_nginx_access_log_line(line)
+
+    raise ValueError(f"지원하지 않는 access format입니다: {access_format}")
 
 
 def parse_login_log_line(line: str):
@@ -215,7 +255,12 @@ def add_pattern_rule_finding(findings: list, rule: dict, log: dict, matched_patt
     )
 
 
-def analyze_access_log(access_log: Path, threshold: int, rules: list[dict] | None = None):
+def analyze_access_log(
+    access_log: Path,
+    threshold: int,
+    rules: list[dict] | None = None,
+    access_format: str = "custom",
+):
     findings = []
     total_requests = 0
 
@@ -234,7 +279,7 @@ def analyze_access_log(access_log: Path, threshold: int, rules: list[dict] | Non
 
     with access_log.open("r", encoding="utf-8") as file:
         for line in file:
-            log = parse_access_log_line(line)
+            log = parse_access_log_line(line, access_format)
 
             if not log:
                 continue
@@ -504,6 +549,7 @@ def build_report_payload(
     access_log: Path,
     login_log: Path,
     rules_file: Path,
+    access_format: str,
     filters: dict,
     threshold: int,
     access_analysis: dict,
@@ -519,6 +565,7 @@ def build_report_payload(
             "access_log": str(access_log),
             "login_log": str(login_log),
             "rules_file": str(rules_file),
+            "access_format": access_format,
             "threshold": threshold,
             "filters": serialize_filters(filters),
             "access_log_exists": access_analysis["access_log_exists"],
@@ -547,6 +594,7 @@ def write_txt_report(
     access_log: Path,
     login_log: Path,
     rules_file: Path,
+    access_format: str,
     filters: dict,
     threshold: int,
     access_analysis: dict,
@@ -566,6 +614,7 @@ def write_txt_report(
         report.write(f"Access 로그 파일 : {access_log}\n")
         report.write(f"Login 로그 파일  : {login_log}\n")
         report.write(f"탐지 룰 파일     : {rules_file}\n")
+        report.write(f"Access 로그 포맷 : {access_format}\n")
         report.write(f"반복 탐지 기준   : 동일 IP에서 {threshold}회 이상\n\n")
         report.write(f"Severity 필터    : {format_filter_values(filters['severities'])}\n")
         report.write(f"공격 유형 필터   : {format_filter_values(filters['attack_types'])}\n")
@@ -621,6 +670,7 @@ def write_json_report(
     access_log: Path,
     login_log: Path,
     rules_file: Path,
+    access_format: str,
     filters: dict,
     threshold: int,
     access_analysis: dict,
@@ -630,6 +680,7 @@ def write_json_report(
         access_log=access_log,
         login_log=login_log,
         rules_file=rules_file,
+        access_format=access_format,
         filters=filters,
         threshold=threshold,
         access_analysis=access_analysis,
@@ -647,6 +698,7 @@ def write_markdown_report(
     login_log: Path,
     rules_file: Path,
     rules: list[dict],
+    access_format: str,
     filters: dict,
     threshold: int,
     access_analysis: dict,
@@ -666,6 +718,7 @@ def write_markdown_report(
         report.write(f"| Access 로그 파일 | {access_log} |\n")
         report.write(f"| Login 로그 파일 | {login_log} |\n")
         report.write(f"| 탐지 룰 파일 | {rules_file} |\n")
+        report.write(f"| Access 로그 포맷 | {access_format} |\n")
         report.write(f"| 반복 탐지 기준 | 동일 IP에서 {threshold}회 이상 |\n")
         report.write(f"| Severity 필터 | {format_filter_values(filters['severities'])} |\n")
         report.write(f"| 공격 유형 필터 | {format_filter_values(filters['attack_types'])} |\n")
@@ -759,6 +812,12 @@ def parse_args():
         help=f"Access log path. Default: {DEFAULT_ACCESS_LOG}",
     )
     parser.add_argument(
+        "--access-format",
+        choices=sorted(SUPPORTED_ACCESS_FORMATS),
+        default="custom",
+        help="Access log format. Default: custom",
+    )
+    parser.add_argument(
         "--login-log",
         type=Path,
         default=None,
@@ -835,6 +894,7 @@ def parse_args():
 def main():
     args = parse_args()
     access_log = args.access_log
+    access_format = args.access_format
     login_log = args.login_log
     threshold = args.threshold
     output_dir = args.output_dir
@@ -864,7 +924,7 @@ def main():
     json_file = output_dir / f"web_attack_detection_report_{timestamp}.json"
 
     rules = load_detection_rules(rules_file)
-    access_analysis = analyze_access_log(access_log, threshold, rules)
+    access_analysis = analyze_access_log(access_log, threshold, rules, access_format)
     login_analysis = analyze_login_log(login_log, threshold)
     filtered_access_analysis = apply_finding_filters(access_analysis, filters)
     filtered_login_analysis = apply_finding_filters(login_analysis, filters)
@@ -875,6 +935,7 @@ def main():
             access_log=access_log,
             login_log=login_log,
             rules_file=rules_file,
+            access_format=access_format,
             filters=filters,
             threshold=threshold,
             access_analysis=filtered_access_analysis,
@@ -889,6 +950,7 @@ def main():
             login_log=login_log,
             rules_file=rules_file,
             rules=rules,
+            access_format=access_format,
             filters=filters,
             threshold=threshold,
             access_analysis=filtered_access_analysis,
@@ -902,6 +964,7 @@ def main():
             access_log=access_log,
             login_log=login_log,
             rules_file=rules_file,
+            access_format=access_format,
             filters=filters,
             threshold=threshold,
             access_analysis=filtered_access_analysis,
