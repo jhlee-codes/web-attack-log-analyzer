@@ -14,6 +14,7 @@ DEFAULT_ACCESS_LOG = Path("logs/access.log")
 DEFAULT_LOGIN_LOG = Path("logs/login.log")
 DEFAULT_THRESHOLD = 5
 RESULT_DIR = Path("result")
+SUPPORTED_REPORT_FORMATS = {"txt", "md", "json"}
 
 
 ACCESS_LOG_PATTERN = re.compile(
@@ -456,6 +457,34 @@ def sanitize_markdown(value) -> str:
     return str(value).replace("|", "\\|").replace("\n", " ")
 
 
+def parse_report_formats(value: str) -> set[str]:
+    requested_formats = {
+        item.strip().lower()
+        for item in value.split(",")
+        if item.strip()
+    }
+
+    if not requested_formats:
+        raise argparse.ArgumentTypeError("format은 비어 있을 수 없습니다.")
+
+    if "all" in requested_formats:
+        if len(requested_formats) > 1:
+            raise argparse.ArgumentTypeError("all은 다른 format과 함께 사용할 수 없습니다.")
+
+        return set(SUPPORTED_REPORT_FORMATS)
+
+    unsupported_formats = requested_formats - SUPPORTED_REPORT_FORMATS
+
+    if unsupported_formats:
+        supported = ", ".join(sorted(SUPPORTED_REPORT_FORMATS | {"all"}))
+        invalid = ", ".join(sorted(unsupported_formats))
+        raise argparse.ArgumentTypeError(
+            f"지원하지 않는 format입니다: {invalid}. 사용 가능: {supported}"
+        )
+
+    return requested_formats
+
+
 def build_report_payload(
     access_log: Path,
     login_log: Path,
@@ -710,6 +739,13 @@ def parse_args():
         default=RESULT_DIR,
         help=f"Directory to save report files. Default: {RESULT_DIR}",
     )
+    parser.add_argument(
+        "--format",
+        dest="report_formats",
+        type=parse_report_formats,
+        default=set(SUPPORTED_REPORT_FORMATS),
+        help="Comma-separated report formats: txt, md, json, all. Default: all",
+    )
 
     args = parser.parse_args()
 
@@ -741,6 +777,7 @@ def main():
     login_log = args.login_log
     threshold = args.threshold
     output_dir = args.output_dir
+    report_formats = args.report_formats
 
     if not access_log.exists() and not login_log.exists():
         print(f"Error: 분석할 로그 파일이 없습니다.")
@@ -758,36 +795,38 @@ def main():
     access_analysis = analyze_access_log(access_log, threshold)
     login_analysis = analyze_login_log(login_log, threshold)
 
-    write_txt_report(
-        result_file=result_file,
-        access_log=access_log,
-        login_log=login_log,
-        threshold=threshold,
-        access_analysis=access_analysis,
-        login_analysis=login_analysis,
-    )
+    if "txt" in report_formats:
+        write_txt_report(
+            result_file=result_file,
+            access_log=access_log,
+            login_log=login_log,
+            threshold=threshold,
+            access_analysis=access_analysis,
+            login_analysis=login_analysis,
+        )
+        print(f"분석 완료. TXT 결과 파일: {result_file}")
 
-    write_markdown_report(
-        markdown_file=markdown_file,
-        access_log=access_log,
-        login_log=login_log,
-        threshold=threshold,
-        access_analysis=access_analysis,
-        login_analysis=login_analysis,
-    )
+    if "md" in report_formats:
+        write_markdown_report(
+            markdown_file=markdown_file,
+            access_log=access_log,
+            login_log=login_log,
+            threshold=threshold,
+            access_analysis=access_analysis,
+            login_analysis=login_analysis,
+        )
+        print(f"분석 완료. Markdown 리포트 파일: {markdown_file}")
 
-    write_json_report(
-        json_file=json_file,
-        access_log=access_log,
-        login_log=login_log,
-        threshold=threshold,
-        access_analysis=access_analysis,
-        login_analysis=login_analysis,
-    )
-
-    print(f"분석 완료. TXT 결과 파일: {result_file}")
-    print(f"분석 완료. Markdown 리포트 파일: {markdown_file}")
-    print(f"분석 완료. JSON 리포트 파일: {json_file}")
+    if "json" in report_formats:
+        write_json_report(
+            json_file=json_file,
+            access_log=access_log,
+            login_log=login_log,
+            threshold=threshold,
+            access_analysis=access_analysis,
+            login_analysis=login_analysis,
+        )
+        print(f"분석 완료. JSON 리포트 파일: {json_file}")
 
 
 if __name__ == "__main__":
