@@ -175,6 +175,59 @@ def test_rules_page_renders_detection_rules(tmp_path, monkeypatch):
     assert "Prepared Statement 사용 여부를 점검합니다." in body
 
 
+def test_rules_page_filters_rules_by_query_parameters(tmp_path, monkeypatch):
+    rules_file = tmp_path / "rules.json"
+    rules_file.write_text(
+        json.dumps(
+            {
+                "rules": [
+                    {
+                        "rule_id": "SQLI-001",
+                        "attack_type": "SQL Injection",
+                        "severity": "HIGH",
+                        "confidence": "HIGH",
+                        "source": "request",
+                        "match_type": "regex",
+                        "evidence_key": "matched_pattern",
+                        "description": "SQL Injection 의심 문자열 탐지",
+                        "patterns": ["union select"],
+                        "reason": "SQL Injection 의심 패턴 발견",
+                        "response": "Prepared Statement 사용 여부를 점검합니다.",
+                    },
+                    {
+                        "rule_id": "SCAN-001",
+                        "attack_type": "Suspicious User-Agent",
+                        "severity": "MEDIUM",
+                        "confidence": "MEDIUM",
+                        "source": "user_agent",
+                        "match_type": "contains",
+                        "evidence_key": "matched_user_agent",
+                        "description": "스캐너 User-Agent 탐지",
+                        "patterns": ["sqlmap"],
+                        "reason": "스캐너 의심 User-Agent 탐지",
+                        "response": "해당 IP 요청 패턴을 확인합니다.",
+                    },
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(app_module, "RULES_FILE", rules_file)
+    monkeypatch.setattr(app_module.access_logger, "info", lambda message: None)
+
+    client = app_module.app.test_client()
+    response = client.get("/rules?severity=HIGH&match_type=regex&q=sqli")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "SQLI-001" in body
+    assert "SCAN-001" not in body
+    assert '<option value="HIGH" selected>HIGH</option>' in body
+    assert '<option value="regex" selected>regex</option>' in body
+    assert 'value="sqli"' in body
+
+
 def test_rules_page_handles_invalid_rules_file(tmp_path, monkeypatch):
     rules_file = tmp_path / "rules.json"
     rules_file.write_text("{invalid json", encoding="utf-8")

@@ -72,6 +72,63 @@
             margin-bottom: 18px;
         }
 
+        .filters {
+            display: grid;
+            grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+            gap: 12px;
+            align-items: end;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 18px;
+        }
+
+        .field label {
+            display: block;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        input,
+        select {
+            width: 100%;
+            min-height: 38px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: #ffffff;
+            color: var(--text);
+            padding: 8px 10px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 38px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--accent);
+            background: var(--accent);
+            color: #ffffff;
+            font-weight: 700;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .button.secondary {
+            border-color: var(--line);
+            background: #ffffff;
+            color: var(--text);
+        }
+
         .rule-list {
             display: grid;
             gap: 14px;
@@ -210,8 +267,13 @@
                 justify-content: flex-start;
             }
 
-            .rule-body {
+            .rule-body,
+            .filters {
                 grid-template-columns: 1fr;
+            }
+
+            .actions {
+                flex-wrap: wrap;
             }
         }
     </style>
@@ -222,7 +284,7 @@
             <h1>Detection Rules</h1>
             <div class="meta">
                 <div>{{ rules_view.rules_file }}</div>
-                <div>{{ rules_view.rules|length }} rules</div>
+                <div>{{ rules_view.rules|length }} / {{ rules_view.total_count }} rules</div>
             </div>
         </div>
     </header>
@@ -231,6 +293,35 @@
         {% if rules_view.error %}
             <div class="notice">{{ rules_view.error }}</div>
         {% endif %}
+
+        <form class="filters" method="GET" action="/rules">
+            <div class="field">
+                <label for="q">Search</label>
+                <input id="q" name="q" type="search" value="{{ rules_view.filters.q }}" placeholder="Rule ID, attack type, pattern">
+            </div>
+            <div class="field">
+                <label for="severity">Severity</label>
+                <select id="severity" name="severity">
+                    <option value="">전체</option>
+                    {% for severity in rules_view.filter_options.severities %}
+                        <option value="{{ severity }}" {% if rules_view.filters.severity == severity %}selected{% endif %}>{{ severity }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="field">
+                <label for="match_type">Match Type</label>
+                <select id="match_type" name="match_type">
+                    <option value="">전체</option>
+                    {% for match_type in rules_view.filter_options.match_types %}
+                        <option value="{{ match_type }}" {% if rules_view.filters.match_type == match_type %}selected{% endif %}>{{ match_type }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="actions">
+                <button class="button" type="submit">적용</button>
+                <a class="button secondary" href="/rules">초기화</a>
+            </div>
+        </form>
 
         {% if rules_view.rules %}
             <div class="rule-list">

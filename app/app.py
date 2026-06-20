@@ -195,6 +195,60 @@ def load_detection_rules_for_view() -> dict:
     }
 
 
+def parse_rule_filters(args) -> dict:
+    return {
+        "q": args.get("q", "").strip(),
+        "severity": args.get("severity", "").strip(),
+        "match_type": args.get("match_type", "").strip(),
+    }
+
+
+def rule_matches_filters(rule: dict, filters: dict) -> bool:
+    if filters["severity"] and rule.get("severity") != filters["severity"]:
+        return False
+
+    if filters["match_type"] and rule.get("match_type", "contains") != filters["match_type"]:
+        return False
+
+    if filters["q"]:
+        search_text = " ".join(
+            [
+                str(rule.get("rule_id", "")),
+                str(rule.get("attack_type", "")),
+                str(rule.get("description", "")),
+                " ".join(str(pattern) for pattern in rule.get("patterns", [])),
+            ]
+        ).lower()
+
+        if filters["q"].lower() not in search_text:
+            return False
+
+    return True
+
+
+def apply_rule_filters(rules: list[dict], filters: dict) -> list[dict]:
+    return [rule for rule in rules if rule_matches_filters(rule, filters)]
+
+
+def build_rule_filter_options(rules: list[dict]) -> dict:
+    return {
+        "severities": sorted({rule.get("severity") for rule in rules if rule.get("severity")}),
+        "match_types": sorted({rule.get("match_type", "contains") for rule in rules}),
+    }
+
+
+def build_rules_view(filters: dict) -> dict:
+    rules_view = load_detection_rules_for_view()
+    all_rules = rules_view["rules"]
+
+    rules_view["filter_options"] = build_rule_filter_options(all_rules)
+    rules_view["filters"] = filters
+    rules_view["total_count"] = len(all_rules)
+    rules_view["rules"] = apply_rule_filters(all_rules, filters)
+
+    return rules_view
+
+
 def has_uploaded_file(file_storage) -> bool:
     return bool(file_storage and file_storage.filename)
 
@@ -542,7 +596,7 @@ def dashboard():
 
 @app.route("/rules")
 def rules():
-    return render_template("rules.html", rules_view=load_detection_rules_for_view())
+    return render_template("rules.html", rules_view=build_rules_view(parse_rule_filters(request.args)))
 
 
 @app.route("/reports")
