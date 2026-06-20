@@ -138,6 +138,24 @@ reason
 response
 ```
 
+## 대시보드 확인
+
+Flask 서버를 실행한 뒤 브라우저에서 `/dashboard`로 접속하면 최신 JSON 리포트를 요약 화면으로 확인할 수 있습니다.
+
+```bash
+python app/app.py
+```
+
+```text
+http://127.0.0.1:5000/dashboard
+```
+
+대시보드는 `result/web_attack_detection_report_*.json` 중 가장 최신 파일을 읽습니다. JSON 리포트가 없다면 먼저 분석기를 실행합니다.
+
+```bash
+python analyzer/web_log_analyzer.py --format json
+```
+
 ## 탐지 룰
 
 | Rule ID | 탐지 유형 | 위험도 |

@@ -1,5 +1,7 @@
 from flask import Flask, render_template, request
 from pathlib import Path
+from collections import Counter
+import json
 import logging
 
 app = Flask(__name__)
@@ -10,6 +12,7 @@ PROJECT_ROOT = BASE_DIR.parent
 
 LOG_DIR = PROJECT_ROOT / "logs"
 LOG_DIR.mkdir(exist_ok=True)
+RESULT_DIR = PROJECT_ROOT / "result"
 
 LOGIN_LOG_FILE = LOG_DIR / "login.log"
 ACCESS_LOG_FILE = LOG_DIR / "access.log"
@@ -29,6 +32,52 @@ def setup_logger(logger_name, log_file):
         logger.addHandler(file_handler)
 
     return logger
+
+
+def get_latest_json_report():
+    report_files = sorted(RESULT_DIR.glob("web_attack_detection_report_*.json"))
+
+    if not report_files:
+        return None
+
+    return report_files[-1]
+
+
+def load_dashboard_data():
+    report_file = get_latest_json_report()
+
+    if report_file is None:
+        return {
+            "report_file": None,
+            "analysis_info": {},
+            "summary": {
+                "total_requests": 0,
+                "total_login_events": 0,
+                "total_findings": 0,
+                "suspicious_ip_count": 0,
+                "risk_counts": {"HIGH": 0, "MEDIUM": 0, "LOW": 0},
+            },
+            "statistics": {
+                "suspicious_ips": [],
+            },
+            "attack_type_counts": {},
+            "recent_findings": [],
+        }
+
+    with report_file.open("r", encoding="utf-8") as file:
+        payload = json.load(file)
+
+    findings = payload.get("findings", [])
+    attack_type_counts = Counter(item.get("attack_type", "Unknown") for item in findings)
+
+    return {
+        "report_file": report_file,
+        "analysis_info": payload.get("analysis_info", {}),
+        "summary": payload.get("summary", {}),
+        "statistics": payload.get("statistics", {}),
+        "attack_type_counts": dict(attack_type_counts.most_common()),
+        "recent_findings": findings[-20:][::-1],
+    }
 
 
 # 로그인 로그 설정
@@ -64,6 +113,11 @@ def log_access(response):
 @app.route("/")
 def index():
     return "web-attack-log-analyzer basic web server"
+
+
+@app.route("/dashboard")
+def dashboard():
+    return render_template("dashboard.html", dashboard=load_dashboard_data())
 
 
 @app.route("/login", methods=["GET", "POST"])

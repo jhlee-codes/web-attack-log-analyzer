@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Attack Log Dashboard</title>
+    <style>
+        :root {
+            --bg: #f5f7fb;
+            --panel: #ffffff;
+            --text: #172033;
+            --muted: #667085;
+            --line: #d9e0ea;
+            --accent: #2563eb;
+            --high: #b42318;
+            --medium: #b54708;
+            --low: #067647;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+        }
+
+        header {
+            border-bottom: 1px solid var(--line);
+            background: var(--panel);
+        }
+
+        .wrap {
+            width: min(1180px, calc(100% - 32px));
+            margin: 0 auto;
+        }
+
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 68px;
+            gap: 16px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 22px;
+            font-weight: 700;
+        }
+
+        .meta {
+            color: var(--muted);
+            font-size: 13px;
+            text-align: right;
+        }
+
+        main {
+            padding: 24px 0 40px;
+        }
+
+        .notice {
+            border: 1px solid var(--line);
+            background: var(--panel);
+            padding: 16px;
+            border-radius: 8px;
+            color: var(--muted);
+            margin-bottom: 18px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .stat {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 16px;
+            min-height: 92px;
+        }
+
+        .stat-label {
+            color: var(--muted);
+            font-size: 13px;
+            margin-bottom: 10px;
+        }
+
+        .stat-value {
+            font-size: 30px;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .split {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 320px;
+            gap: 16px;
+            align-items: start;
+        }
+
+        section {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .section-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--line);
+        }
+
+        h2 {
+            margin: 0;
+            font-size: 16px;
+        }
+
+        .count-list {
+            padding: 8px 0;
+        }
+
+        .count-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 16px;
+            border-bottom: 1px solid #edf1f6;
+        }
+
+        .count-row:last-child {
+            border-bottom: 0;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            min-height: 24px;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+            background: #eef4ff;
+            color: var(--accent);
+        }
+
+        .badge.high {
+            background: #fef3f2;
+            color: var(--high);
+        }
+
+        .badge.medium {
+            background: #fffaeb;
+            color: var(--medium);
+        }
+
+        .badge.low {
+            background: #ecfdf3;
+            color: var(--low);
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 900px;
+        }
+
+        th,
+        td {
+            padding: 12px 14px;
+            border-bottom: 1px solid #edf1f6;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        th {
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+            background: #fbfcfe;
+        }
+
+        td {
+            font-size: 13px;
+        }
+
+        .mono {
+            font-family: Menlo, Consolas, monospace;
+            font-size: 12px;
+        }
+
+        .empty {
+            padding: 22px 16px;
+            color: var(--muted);
+        }
+
+        @media (max-width: 860px) {
+            .topbar {
+                align-items: flex-start;
+                flex-direction: column;
+                padding: 16px 0;
+            }
+
+            .meta {
+                text-align: left;
+            }
+
+            .stats,
+            .split {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="wrap topbar">
+            <h1>Web Attack Log Dashboard</h1>
+            <div class="meta">
+                {% if dashboard.report_file %}
+                    <div>{{ dashboard.report_file.name }}</div>
+                    <div>{{ dashboard.analysis_info.analysis_time }}</div>
+                {% else %}
+                    <div>JSON 리포트 없음</div>
+                {% endif %}
+            </div>
+        </div>
+    </header>
+
+    <main class="wrap">
+        {% if not dashboard.report_file %}
+            <div class="notice">
+                아직 분석 JSON 리포트가 없습니다. `python analyzer/web_log_analyzer.py --format json` 명령으로 리포트를 생성한 뒤 새로고침하세요.
+            </div>
+        {% endif %}
+
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-label">HTTP 요청</div>
+                <div class="stat-value">{{ dashboard.summary.total_requests }}</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">로그인 이벤트</div>
+                <div class="stat-value">{{ dashboard.summary.total_login_events }}</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">탐지 이벤트</div>
+                <div class="stat-value">{{ dashboard.summary.total_findings }}</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">의심 IP</div>
+                <div class="stat-value">{{ dashboard.summary.suspicious_ip_count }}</div>
+            </div>
+        </div>
+
+        <div class="split">
+            <section>
+                <div class="section-head">
+                    <h2>최근 탐지 결과</h2>
+                    <span class="badge">{{ dashboard.recent_findings|length }}</span>
+                </div>
+
+                {% if dashboard.recent_findings %}
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Severity</th>
+                                    <th>Rule</th>
+                                    <th>Type</th>
+                                    <th>IP</th>
+                                    <th>Path</th>
+                                    <th>Evidence</th>
+                                    <th>Response</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for finding in dashboard.recent_findings %}
+                                    <tr>
+                                        <td>
+                                            <span class="badge {{ finding.severity|lower }}">{{ finding.severity }}</span>
+                                        </td>
+                                        <td class="mono">{{ finding.rule_id }}</td>
+                                        <td>{{ finding.attack_type }}</td>
+                                        <td class="mono">{{ finding.ip }}</td>
+                                        <td class="mono">{{ finding.path }}</td>
+                                        <td class="mono">{{ finding.evidence }}</td>
+                                        <td>{{ finding.response }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="empty">탐지 결과가 없습니다.</div>
+                {% endif %}
+            </section>
+
+            <div>
+                <section>
+                    <div class="section-head">
+                        <h2>위험도</h2>
+                    </div>
+                    <div class="count-list">
+                        <div class="count-row">
+                            <span>HIGH</span>
+                            <span class="badge high">{{ dashboard.summary.risk_counts.HIGH }}</span>
+                        </div>
+                        <div class="count-row">
+                            <span>MEDIUM</span>
+                            <span class="badge medium">{{ dashboard.summary.risk_counts.MEDIUM }}</span>
+                        </div>
+                        <div class="count-row">
+                            <span>LOW</span>
+                            <span class="badge low">{{ dashboard.summary.risk_counts.LOW }}</span>
+                        </div>
+                    </div>
+                </section>
+
+                <section style="margin-top: 16px;">
+                    <div class="section-head">
+                        <h2>공격 유형</h2>
+                    </div>
+                    <div class="count-list">
+                        {% if dashboard.attack_type_counts %}
+                            {% for attack_type, count in dashboard.attack_type_counts.items() %}
+                                <div class="count-row">
+                                    <span>{{ attack_type }}</span>
+                                    <span class="badge">{{ count }}</span>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="empty">집계할 공격 유형이 없습니다.</div>
+                        {% endif %}
+                    </div>
+                </section>
+
+                <section style="margin-top: 16px;">
+                    <div class="section-head">
+                        <h2>의심 IP</h2>
+                    </div>
+                    <div class="count-list">
+                        {% if dashboard.statistics.suspicious_ips %}
+                            {% for ip in dashboard.statistics.suspicious_ips %}
+                                <div class="count-row">
+                                    <span class="mono">{{ ip }}</span>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="empty">의심 IP가 없습니다.</div>
+                        {% endif %}
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+</body>
+</html>
