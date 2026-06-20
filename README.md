@@ -105,6 +105,9 @@ python analyzer/web_log_analyzer.py \
 --format       출력 포맷: txt, md, json, all
 --output-dir   리포트 저장 디렉터리
 --rules-file   탐지 룰 JSON 파일 경로
+--severity     위험도 필터: HIGH, MEDIUM, LOW
+--attack-type  공격 유형 필터
+--ip           IP 필터
 ```
 
 예시:
@@ -114,6 +117,9 @@ python analyzer/web_log_analyzer.py --format json
 python analyzer/web_log_analyzer.py --format txt,md
 python analyzer/web_log_analyzer.py --threshold 10 --output-dir result
 python analyzer/web_log_analyzer.py --rules-file analyzer/rules.json
+python analyzer/web_log_analyzer.py --severity HIGH --format json
+python analyzer/web_log_analyzer.py --attack-type "SQL Injection" --format md
+python analyzer/web_log_analyzer.py --ip 127.0.0.1 --format json
 ```
 
 ## 리포트 출력

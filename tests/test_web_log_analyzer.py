@@ -161,6 +161,75 @@ def test_cli_uses_custom_rules_file(tmp_path):
     assert payload["findings"][0]["rule_id"] == "CUSTOM-001"
 
 
+def test_cli_filters_findings_by_severity(tmp_path):
+    output_dir = tmp_path / "result"
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(ANALYZER_SCRIPT),
+            "--access-log",
+            str(PROJECT_ROOT / "logs" / "access.log"),
+            "--login-log",
+            str(PROJECT_ROOT / "logs" / "login.log"),
+            "--severity",
+            "HIGH",
+            "--format",
+            "json",
+            "--output-dir",
+            str(output_dir),
+        ],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0
+
+    output_file = next(output_dir.glob("*.json"))
+    payload = json.loads(output_file.read_text(encoding="utf-8"))
+
+    assert payload["analysis_info"]["filters"]["severities"] == ["HIGH"]
+    assert payload["findings"]
+    assert {finding["severity"] for finding in payload["findings"]} == {"HIGH"}
+    assert payload["summary"]["risk_counts"]["MEDIUM"] == 0
+
+
+def test_cli_filters_findings_by_attack_type(tmp_path):
+    output_dir = tmp_path / "result"
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(ANALYZER_SCRIPT),
+            "--access-log",
+            str(PROJECT_ROOT / "logs" / "access.log"),
+            "--login-log",
+            str(PROJECT_ROOT / "logs" / "login.log"),
+            "--attack-type",
+            "SQL Injection",
+            "--format",
+            "json",
+            "--output-dir",
+            str(output_dir),
+        ],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0
+
+    output_file = next(output_dir.glob("*.json"))
+    payload = json.loads(output_file.read_text(encoding="utf-8"))
+
+    assert payload["analysis_info"]["filters"]["attack_types"] == ["SQL Injection"]
+    assert payload["findings"]
+    assert {finding["attack_type"] for finding in payload["findings"]} == {"SQL Injection"}
+
+
 def test_cli_rejects_invalid_format(tmp_path):
     completed = subprocess.run(
         [

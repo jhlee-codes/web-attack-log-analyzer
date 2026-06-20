@@ -16,6 +16,7 @@ DEFAULT_THRESHOLD = 5
 RESULT_DIR = Path("result")
 DEFAULT_RULES_FILE = Path(__file__).resolve().parent / "rules.json"
 SUPPORTED_REPORT_FORMATS = {"txt", "md", "json"}
+SUPPORTED_SEVERITIES = {"HIGH", "MEDIUM", "LOW"}
 
 
 ACCESS_LOG_PATTERN = re.compile(
@@ -426,10 +427,84 @@ def parse_report_formats(value: str) -> set[str]:
     return requested_formats
 
 
+def parse_csv_values(value: str) -> set[str]:
+    values = {
+        item.strip()
+        for item in value.split(",")
+        if item.strip()
+    }
+
+    if not values:
+        raise argparse.ArgumentTypeError("필터 값은 비어 있을 수 없습니다.")
+
+    return values
+
+
+def parse_severities(value: str) -> set[str]:
+    severities = {item.upper() for item in parse_csv_values(value)}
+    unsupported_severities = severities - SUPPORTED_SEVERITIES
+
+    if unsupported_severities:
+        supported = ", ".join(sorted(SUPPORTED_SEVERITIES))
+        invalid = ", ".join(sorted(unsupported_severities))
+        raise argparse.ArgumentTypeError(
+            f"지원하지 않는 severity입니다: {invalid}. 사용 가능: {supported}"
+        )
+
+    return severities
+
+
+def finding_matches_filters(finding: dict, filters: dict) -> bool:
+    severities = filters.get("severities") or set()
+    attack_types = filters.get("attack_types") or set()
+    ips = filters.get("ips") or set()
+
+    if severities and finding["severity"].upper() not in severities:
+        return False
+
+    if attack_types:
+        finding_attack_type = finding["attack_type"].lower()
+
+        if finding_attack_type not in {item.lower() for item in attack_types}:
+            return False
+
+    if ips and finding["ip"] not in ips:
+        return False
+
+    return True
+
+
+def apply_finding_filters(analysis: dict, filters: dict) -> dict:
+    if not any(filters.values()):
+        return analysis
+
+    filtered_analysis = analysis.copy()
+    filtered_analysis["findings"] = [
+        finding
+        for finding in analysis["findings"]
+        if finding_matches_filters(finding, filters)
+    ]
+
+    return filtered_analysis
+
+
+def format_filter_values(values: set[str]) -> str:
+    return ", ".join(sorted(values)) if values else "-"
+
+
+def serialize_filters(filters: dict) -> dict:
+    return {
+        "severities": sorted(filters.get("severities") or []),
+        "attack_types": sorted(filters.get("attack_types") or []),
+        "ips": sorted(filters.get("ips") or []),
+    }
+
+
 def build_report_payload(
     access_log: Path,
     login_log: Path,
     rules_file: Path,
+    filters: dict,
     threshold: int,
     access_analysis: dict,
     login_analysis: dict,
@@ -445,6 +520,7 @@ def build_report_payload(
             "login_log": str(login_log),
             "rules_file": str(rules_file),
             "threshold": threshold,
+            "filters": serialize_filters(filters),
             "access_log_exists": access_analysis["access_log_exists"],
             "login_log_exists": login_analysis["login_log_exists"],
         },
@@ -471,6 +547,7 @@ def write_txt_report(
     access_log: Path,
     login_log: Path,
     rules_file: Path,
+    filters: dict,
     threshold: int,
     access_analysis: dict,
     login_analysis: dict,
@@ -490,6 +567,9 @@ def write_txt_report(
         report.write(f"Login 로그 파일  : {login_log}\n")
         report.write(f"탐지 룰 파일     : {rules_file}\n")
         report.write(f"반복 탐지 기준   : 동일 IP에서 {threshold}회 이상\n\n")
+        report.write(f"Severity 필터    : {format_filter_values(filters['severities'])}\n")
+        report.write(f"공격 유형 필터   : {format_filter_values(filters['attack_types'])}\n")
+        report.write(f"IP 필터          : {format_filter_values(filters['ips'])}\n\n")
 
         report.write("--------------------------------------------------\n")
         report.write("[요약]\n")
@@ -541,6 +621,7 @@ def write_json_report(
     access_log: Path,
     login_log: Path,
     rules_file: Path,
+    filters: dict,
     threshold: int,
     access_analysis: dict,
     login_analysis: dict,
@@ -549,6 +630,7 @@ def write_json_report(
         access_log=access_log,
         login_log=login_log,
         rules_file=rules_file,
+        filters=filters,
         threshold=threshold,
         access_analysis=access_analysis,
         login_analysis=login_analysis,
@@ -565,6 +647,7 @@ def write_markdown_report(
     login_log: Path,
     rules_file: Path,
     rules: list[dict],
+    filters: dict,
     threshold: int,
     access_analysis: dict,
     login_analysis: dict,
@@ -583,7 +666,10 @@ def write_markdown_report(
         report.write(f"| Access 로그 파일 | {access_log} |\n")
         report.write(f"| Login 로그 파일 | {login_log} |\n")
         report.write(f"| 탐지 룰 파일 | {rules_file} |\n")
-        report.write(f"| 반복 탐지 기준 | 동일 IP에서 {threshold}회 이상 |\n\n")
+        report.write(f"| 반복 탐지 기준 | 동일 IP에서 {threshold}회 이상 |\n")
+        report.write(f"| Severity 필터 | {format_filter_values(filters['severities'])} |\n")
+        report.write(f"| 공격 유형 필터 | {format_filter_values(filters['attack_types'])} |\n")
+        report.write(f"| IP 필터 | {format_filter_values(filters['ips'])} |\n\n")
 
         report.write("## 2. Summary\n\n")
         report.write("| 항목 | 값 |\n")
@@ -697,6 +783,24 @@ def parse_args():
         help=f"Detection rules JSON file. Default: {DEFAULT_RULES_FILE}",
     )
     parser.add_argument(
+        "--severity",
+        type=parse_severities,
+        default=set(),
+        help="Comma-separated severity filter: HIGH, MEDIUM, LOW",
+    )
+    parser.add_argument(
+        "--attack-type",
+        type=parse_csv_values,
+        default=set(),
+        help='Comma-separated attack type filter. Example: "SQL Injection,XSS"',
+    )
+    parser.add_argument(
+        "--ip",
+        type=parse_csv_values,
+        default=set(),
+        help="Comma-separated source IP filter.",
+    )
+    parser.add_argument(
         "--format",
         dest="report_formats",
         type=parse_report_formats,
@@ -736,6 +840,11 @@ def main():
     output_dir = args.output_dir
     rules_file = args.rules_file
     report_formats = args.report_formats
+    filters = {
+        "severities": args.severity,
+        "attack_types": args.attack_type,
+        "ips": args.ip,
+    }
 
     if not access_log.exists() and not login_log.exists():
         print(f"Error: 분석할 로그 파일이 없습니다.")
@@ -757,6 +866,8 @@ def main():
     rules = load_detection_rules(rules_file)
     access_analysis = analyze_access_log(access_log, threshold, rules)
     login_analysis = analyze_login_log(login_log, threshold)
+    filtered_access_analysis = apply_finding_filters(access_analysis, filters)
+    filtered_login_analysis = apply_finding_filters(login_analysis, filters)
 
     if "txt" in report_formats:
         write_txt_report(
@@ -764,9 +875,10 @@ def main():
             access_log=access_log,
             login_log=login_log,
             rules_file=rules_file,
+            filters=filters,
             threshold=threshold,
-            access_analysis=access_analysis,
-            login_analysis=login_analysis,
+            access_analysis=filtered_access_analysis,
+            login_analysis=filtered_login_analysis,
         )
         print(f"분석 완료. TXT 결과 파일: {result_file}")
 
@@ -777,9 +889,10 @@ def main():
             login_log=login_log,
             rules_file=rules_file,
             rules=rules,
+            filters=filters,
             threshold=threshold,
-            access_analysis=access_analysis,
-            login_analysis=login_analysis,
+            access_analysis=filtered_access_analysis,
+            login_analysis=filtered_login_analysis,
         )
         print(f"분석 완료. Markdown 리포트 파일: {markdown_file}")
 
@@ -789,9 +902,10 @@ def main():
             access_log=access_log,
             login_log=login_log,
             rules_file=rules_file,
+            filters=filters,
             threshold=threshold,
-            access_analysis=access_analysis,
-            login_analysis=login_analysis,
+            access_analysis=filtered_access_analysis,
+            login_analysis=filtered_login_analysis,
         )
         print(f"분석 완료. JSON 리포트 파일: {json_file}")
 
