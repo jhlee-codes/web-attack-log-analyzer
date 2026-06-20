@@ -72,6 +72,62 @@
             margin-bottom: 18px;
         }
 
+        .filters {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+            align-items: end;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 18px;
+        }
+
+        .field label {
+            display: block;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        select {
+            width: 100%;
+            min-height: 38px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: #ffffff;
+            color: var(--text);
+            padding: 8px 10px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 38px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--accent);
+            background: var(--accent);
+            color: #ffffff;
+            font-weight: 700;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .button.secondary {
+            border-color: var(--line);
+            background: #ffffff;
+            color: var(--text);
+        }
+
         .stats {
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -274,8 +330,13 @@
             }
 
             .stats,
-            .split {
+            .split,
+            .filters {
                 grid-template-columns: 1fr;
+            }
+
+            .actions {
+                flex-wrap: wrap;
             }
         }
     </style>
@@ -301,6 +362,40 @@
                 아직 분석 JSON 리포트가 없습니다. `python analyzer/web_log_analyzer.py --format json` 명령으로 리포트를 생성한 뒤 새로고침하세요.
             </div>
         {% endif %}
+
+        <form class="filters" method="GET" action="/dashboard">
+            <div class="field">
+                <label for="severity">Severity</label>
+                <select id="severity" name="severity">
+                    <option value="">전체</option>
+                    {% for severity in dashboard.filter_options.severities %}
+                        <option value="{{ severity }}" {% if dashboard.filters.severity == severity %}selected{% endif %}>{{ severity }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="field">
+                <label for="attack_type">Attack Type</label>
+                <select id="attack_type" name="attack_type">
+                    <option value="">전체</option>
+                    {% for attack_type in dashboard.filter_options.attack_types %}
+                        <option value="{{ attack_type }}" {% if dashboard.filters.attack_type == attack_type %}selected{% endif %}>{{ attack_type }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="field">
+                <label for="ip">IP</label>
+                <select id="ip" name="ip">
+                    <option value="">전체</option>
+                    {% for ip in dashboard.filter_options.ips %}
+                        <option value="{{ ip }}" {% if dashboard.filters.ip == ip %}selected{% endif %}>{{ ip }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="actions">
+                <button class="button" type="submit">적용</button>
+                <a class="button secondary" href="/dashboard">초기화</a>
+            </div>
+        </form>
 
         <div class="stats">
             <div class="stat">

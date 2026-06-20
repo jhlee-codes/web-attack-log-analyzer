@@ -43,7 +43,59 @@ def get_latest_json_report():
     return report_files[-1]
 
 
-def load_dashboard_data():
+def parse_dashboard_filters(args):
+    return {
+        "severity": args.get("severity", "").strip(),
+        "attack_type": args.get("attack_type", "").strip(),
+        "ip": args.get("ip", "").strip(),
+    }
+
+
+def finding_matches_dashboard_filters(finding: dict, filters: dict) -> bool:
+    if filters["severity"] and finding.get("severity") != filters["severity"]:
+        return False
+
+    if filters["attack_type"] and finding.get("attack_type") != filters["attack_type"]:
+        return False
+
+    if filters["ip"] and finding.get("ip") != filters["ip"]:
+        return False
+
+    return True
+
+
+def build_dashboard_summary(base_summary: dict, findings: list[dict]) -> dict:
+    risk_counts = {
+        "HIGH": 0,
+        "MEDIUM": 0,
+        "LOW": 0,
+    }
+
+    for finding in findings:
+        severity = finding.get("severity")
+
+        if severity in risk_counts:
+            risk_counts[severity] += 1
+
+    return {
+        "total_requests": base_summary.get("total_requests", 0),
+        "total_login_events": base_summary.get("total_login_events", 0),
+        "total_findings": len(findings),
+        "suspicious_ip_count": len({item.get("ip") for item in findings if item.get("ip") != "-"}),
+        "risk_counts": risk_counts,
+    }
+
+
+def build_filter_options(findings: list[dict]) -> dict:
+    return {
+        "severities": sorted({item.get("severity") for item in findings if item.get("severity")}),
+        "attack_types": sorted({item.get("attack_type") for item in findings if item.get("attack_type")}),
+        "ips": sorted({item.get("ip") for item in findings if item.get("ip") and item.get("ip") != "-"}),
+    }
+
+
+def load_dashboard_data(filters: dict | None = None):
+    filters = filters or {"severity": "", "attack_type": "", "ip": ""}
     report_file = get_latest_json_report()
 
     if report_file is None:
@@ -65,18 +117,25 @@ def load_dashboard_data():
             "attack_type_counts": {},
             "attack_type_chart": [],
             "top_request_ips": [],
+            "filter_options": {"severities": [], "attack_types": [], "ips": []},
+            "filters": filters,
             "recent_findings": [],
         }
 
     with report_file.open("r", encoding="utf-8") as file:
         payload = json.load(file)
 
-    findings = payload.get("findings", [])
+    all_findings = payload.get("findings", [])
+    findings = [
+        finding
+        for finding in all_findings
+        if finding_matches_dashboard_filters(finding, filters)
+    ]
     attack_type_counts = Counter(item.get("attack_type", "Unknown") for item in findings)
     statistics = payload.get("statistics", {})
-    summary = payload.get("summary", {})
+    summary = build_dashboard_summary(payload.get("summary", {}), findings)
     risk_counts = summary.get("risk_counts", {"HIGH": 0, "MEDIUM": 0, "LOW": 0})
-    request_count_by_ip = statistics.get("request_count_by_ip", {})
+    request_count_by_ip = Counter(item.get("ip") for item in findings if item.get("ip") and item.get("ip") != "-")
 
     return {
         "report_file": report_file,
@@ -87,6 +146,8 @@ def load_dashboard_data():
         "attack_type_counts": dict(attack_type_counts.most_common()),
         "attack_type_chart": build_count_chart(dict(attack_type_counts.most_common())),
         "top_request_ips": build_count_chart(request_count_by_ip, limit=5),
+        "filter_options": build_filter_options(all_findings),
+        "filters": filters,
         "recent_findings": findings[-20:][::-1],
     }
 
@@ -146,7 +207,8 @@ def index():
 
 @app.route("/dashboard")
 def dashboard():
-    return render_template("dashboard.html", dashboard=load_dashboard_data())
+    filters = parse_dashboard_filters(request.args)
+    return render_template("dashboard.html", dashboard=load_dashboard_data(filters))
 
 
 @app.route("/login", methods=["GET", "POST"])

@@ -165,6 +165,14 @@ http://127.0.0.1:5000/dashboard
 python analyzer/web_log_analyzer.py --format json
 ```
 
+대시보드에서도 필터를 적용할 수 있습니다.
+
+```text
+http://127.0.0.1:5000/dashboard?severity=HIGH
+http://127.0.0.1:5000/dashboard?attack_type=SQL%20Injection
+http://127.0.0.1:5000/dashboard?severity=HIGH&ip=127.0.0.1
+```
+
 ## 탐지 룰
 
 패턴 기반 탐지 룰은 `analyzer/rules.json`에서 관리합니다. 룰 파일을 수정하면 분석기 코드를 바꾸지 않고도 탐지 패턴, 위험도, 신뢰도, 대응 문구를 조정할 수 있습니다.
