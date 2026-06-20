@@ -15,6 +15,7 @@ PROJECT_ROOT = BASE_DIR.parent
 LOG_DIR = PROJECT_ROOT / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 RESULT_DIR = PROJECT_ROOT / "result"
+RULES_FILE = PROJECT_ROOT / "analyzer" / "rules.json"
 
 LOGIN_LOG_FILE = LOG_DIR / "login.log"
 ACCESS_LOG_FILE = LOG_DIR / "access.log"
@@ -82,6 +83,33 @@ def build_report_downloads(report_file: Path | None) -> list[dict]:
         for label, candidate in candidates
         if candidate.exists()
     ]
+
+
+def load_detection_rules_for_view() -> dict:
+    try:
+        with RULES_FILE.open("r", encoding="utf-8") as file:
+            payload = json.load(file)
+    except (OSError, json.JSONDecodeError) as error:
+        return {
+            "rules_file": RULES_FILE,
+            "rules": [],
+            "error": f"탐지 룰 파일을 읽을 수 없습니다: {error}",
+        }
+
+    rules = payload.get("rules", [])
+
+    if not isinstance(rules, list):
+        return {
+            "rules_file": RULES_FILE,
+            "rules": [],
+            "error": "탐지 룰 파일 형식이 올바르지 않습니다: rules는 list여야 합니다.",
+        }
+
+    return {
+        "rules_file": RULES_FILE,
+        "rules": rules,
+        "error": "",
+    }
 
 
 def parse_dashboard_filters(args):
@@ -327,6 +355,11 @@ def dashboard():
     filters = parse_dashboard_filters(request.args)
     report_name = request.args.get("report", "").strip()
     return render_template("dashboard.html", dashboard=load_dashboard_data(filters, report_name))
+
+
+@app.route("/rules")
+def rules():
+    return render_template("rules.html", rules_view=load_detection_rules_for_view())
 
 
 @app.route("/reports/<path:filename>")

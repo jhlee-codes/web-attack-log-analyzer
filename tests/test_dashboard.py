@@ -9,6 +9,60 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from app import app as app_module
 
 
+def test_rules_page_renders_detection_rules(tmp_path, monkeypatch):
+    rules_file = tmp_path / "rules.json"
+    rules_file.write_text(
+        json.dumps(
+            {
+                "rules": [
+                    {
+                        "rule_id": "SQLI-001",
+                        "attack_type": "SQL Injection",
+                        "severity": "HIGH",
+                        "confidence": "HIGH",
+                        "source": "request",
+                        "evidence_key": "matched_pattern",
+                        "description": "SQL Injection 의심 문자열 탐지",
+                        "patterns": ["' or", "union select"],
+                        "reason": "SQL Injection 의심 패턴 발견",
+                        "response": "Prepared Statement 사용 여부를 점검합니다.",
+                    },
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(app_module, "RULES_FILE", rules_file)
+    monkeypatch.setattr(app_module.access_logger, "info", lambda message: None)
+
+    client = app_module.app.test_client()
+    response = client.get("/rules")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Detection Rules" in body
+    assert "SQLI-001" in body
+    assert "SQL Injection" in body
+    assert "union select" in body
+    assert "Prepared Statement 사용 여부를 점검합니다." in body
+
+
+def test_rules_page_handles_invalid_rules_file(tmp_path, monkeypatch):
+    rules_file = tmp_path / "rules.json"
+    rules_file.write_text("{invalid json", encoding="utf-8")
+    monkeypatch.setattr(app_module, "RULES_FILE", rules_file)
+    monkeypatch.setattr(app_module.access_logger, "info", lambda message: None)
+
+    client = app_module.app.test_client()
+    response = client.get("/rules")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "탐지 룰 파일을 읽을 수 없습니다" in body
+    assert "표시할 탐지 룰이 없습니다." in body
+
+
 def test_dashboard_renders_without_json_report(tmp_path, monkeypatch):
     monkeypatch.setattr(app_module, "RESULT_DIR", tmp_path)
     monkeypatch.setattr(app_module.access_logger, "info", lambda message: None)
