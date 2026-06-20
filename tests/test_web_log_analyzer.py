@@ -50,6 +50,70 @@ def test_analyze_nginx_access_log_detects_attack_rule_ids(tmp_path):
     assert {"SQLI-001", "XSS-001"}.issubset(rule_ids)
 
 
+def test_analyze_access_log_supports_regex_rule_matching(tmp_path):
+    access_log = tmp_path / "access.log"
+    write_lines(
+        access_log,
+        [
+            '2026-06-20 10:00:00 HTTP_REQUEST ip=10.0.0.1 method=GET path="/search" query="q=UNION%20ALL%20SELECT%20password" status=200 user_agent="Mozilla/5.0"',
+        ],
+    )
+    rules = [
+        {
+            "rule_id": "REGEX-001",
+            "attack_type": "Regex SQL Injection",
+            "severity": "HIGH",
+            "confidence": "HIGH",
+            "source": "request",
+            "match_type": "regex",
+            "evidence_key": "matched_pattern",
+            "description": "Regex 기반 SQL Injection 탐지",
+            "patterns": [r"union\s+(all\s+)?select"],
+            "reason": "정규식 기반 SQL Injection 패턴 발견",
+            "response": "쿼리 파라미터 검증을 확인합니다.",
+        },
+    ]
+
+    result = web_log_analyzer.analyze_access_log(access_log, threshold=5, rules=rules)
+
+    assert result["findings"][0]["rule_id"] == "REGEX-001"
+    assert result["findings"][0]["evidence"] == r"matched_pattern=union\s+(all\s+)?select"
+
+
+def test_load_detection_rules_rejects_invalid_match_type(tmp_path):
+    rules_file = tmp_path / "rules.json"
+    rules_file.write_text(
+        json.dumps(
+            {
+                "rules": [
+                    {
+                        "rule_id": "BAD-001",
+                        "attack_type": "Bad Rule",
+                        "severity": "HIGH",
+                        "confidence": "HIGH",
+                        "source": "request",
+                        "match_type": "wildcard",
+                        "evidence_key": "matched_pattern",
+                        "description": "잘못된 매칭 방식",
+                        "patterns": ["bad"],
+                        "reason": "잘못된 룰",
+                        "response": "룰 설정을 확인합니다.",
+                    },
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    try:
+        web_log_analyzer.load_detection_rules(rules_file)
+    except ValueError as error:
+        assert "match_type" in str(error)
+    else:
+        raise AssertionError("invalid match_type should raise ValueError")
+
+
 def test_analyze_login_log_detects_repeated_failures_and_success(tmp_path):
     login_log = tmp_path / "login.log"
     write_lines(

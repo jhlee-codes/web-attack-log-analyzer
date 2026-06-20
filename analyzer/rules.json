@@ -6,6 +6,7 @@
       "severity": "HIGH",
       "confidence": "HIGH",
       "source": "request",
+      "match_type": "contains",
       "evidence_key": "matched_pattern",
       "description": "SQL Injection 의심 문자열 탐지",
       "patterns": [
@@ -30,6 +31,7 @@
       "severity": "HIGH",
       "confidence": "HIGH",
       "source": "request",
+      "match_type": "contains",
       "evidence_key": "matched_pattern",
       "description": "Script 삽입 또는 이벤트 핸들러 기반 XSS 패턴 탐지",
       "patterns": [
@@ -51,6 +53,7 @@
       "severity": "HIGH",
       "confidence": "HIGH",
       "source": "request",
+      "match_type": "contains",
       "evidence_key": "matched_pattern",
       "description": "../, /etc/passwd 등 경로 조작 시도 탐지",
       "patterns": [
@@ -71,6 +74,7 @@
       "severity": "MEDIUM",
       "confidence": "MEDIUM",
       "source": "request",
+      "match_type": "contains",
       "evidence_key": "matched_path",
       "description": "관리자 페이지 접근 시도 탐지",
       "patterns": [
@@ -90,6 +94,7 @@
       "severity": "MEDIUM",
       "confidence": "MEDIUM",
       "source": "user_agent",
+      "match_type": "contains",
       "evidence_key": "matched_user_agent",
       "description": "sqlmap, nikto, curl 등 자동화 도구 User-Agent 탐지",
       "patterns": [

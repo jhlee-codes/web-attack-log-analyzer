@@ -201,6 +201,7 @@ http://127.0.0.1:5000/rules
   "severity": "HIGH",
   "confidence": "HIGH",
   "source": "request",
+  "match_type": "contains",
   "evidence_key": "matched_pattern",
   "description": "SQL Injection 의심 문자열 탐지",
   "patterns": ["' or", "union select"],
@@ -210,6 +211,7 @@ http://127.0.0.1:5000/rules
 ```
 
 `source`는 `request` 또는 `user_agent`를 사용할 수 있습니다.
+`match_type`은 `contains` 또는 `regex`를 사용할 수 있습니다. 생략하면 `contains`로 처리되며, `regex`를 사용하면 Python 정규식으로 패턴을 탐지합니다.
 
 | Rule ID | 탐지 유형 | 위험도 |
 |---|---|---|

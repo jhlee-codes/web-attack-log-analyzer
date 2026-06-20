@@ -253,6 +253,10 @@
                                     <div class="value mono">{{ rule.source }}</div>
                                 </div>
                                 <div>
+                                    <div class="label">Match Type</div>
+                                    <div class="value mono">{{ rule.match_type|default("contains") }}</div>
+                                </div>
+                                <div>
                                     <div class="label">Evidence Key</div>
                                     <div class="value mono">{{ rule.evidence_key }}</div>
                                 </div>

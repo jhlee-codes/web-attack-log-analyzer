@@ -173,6 +173,20 @@ def load_detection_rules(rules_file: Path = DEFAULT_RULES_FILE) -> list[dict]:
         if not isinstance(rule["patterns"], list) or not rule["patterns"]:
             raise ValueError(f"{rule['rule_id']} 룰 patterns는 비어 있지 않은 list여야 합니다.")
 
+        rule["match_type"] = rule.get("match_type", "contains")
+
+        if rule["match_type"] not in {"contains", "regex"}:
+            raise ValueError(f"{rule['rule_id']} 룰 match_type은 contains 또는 regex여야 합니다.")
+
+        if rule["match_type"] == "regex":
+            for pattern in rule["patterns"]:
+                try:
+                    re.compile(pattern, re.IGNORECASE)
+                except re.error as error:
+                    raise ValueError(
+                        f"{rule['rule_id']} 룰 regex 패턴이 올바르지 않습니다: {pattern} ({error})"
+                    ) from error
+
     return rules
 
 
@@ -183,13 +197,16 @@ def normalize_request_text(path: str, query: str) -> str:
     return decoded_text.lower()
 
 
-def contains_any_pattern(text: str, patterns: list[str]) -> bool:
-    return any(pattern in text for pattern in patterns)
+def find_matching_pattern(text: str, rule: dict) -> str:
+    match_type = rule.get("match_type", "contains")
 
+    for pattern in rule["patterns"]:
+        if match_type == "regex":
+            if re.search(pattern, text, re.IGNORECASE):
+                return pattern
+            continue
 
-def find_first_pattern(text: str, patterns: list[str]) -> str:
-    for pattern in patterns:
-        if pattern in text:
+        if pattern.lower() in text:
             return pattern
 
     return "-"
@@ -304,13 +321,14 @@ def analyze_access_log(
 
             for rule in rules:
                 target_text = request_text if rule["source"] == "request" else user_agent_lower
+                matched_pattern = find_matching_pattern(target_text, rule)
 
-                if contains_any_pattern(target_text, rule["patterns"]):
+                if matched_pattern != "-":
                     add_pattern_rule_finding(
                         findings=findings,
                         rule=rule,
                         log=log,
-                        matched_pattern=find_first_pattern(target_text, rule["patterns"]),
+                        matched_pattern=matched_pattern,
                     )
 
     for ip, count in status_404_by_ip.items():

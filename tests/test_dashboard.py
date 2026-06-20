@@ -21,6 +21,7 @@ def test_rules_page_renders_detection_rules(tmp_path, monkeypatch):
                         "severity": "HIGH",
                         "confidence": "HIGH",
                         "source": "request",
+                        "match_type": "regex",
                         "evidence_key": "matched_pattern",
                         "description": "SQL Injection 의심 문자열 탐지",
                         "patterns": ["' or", "union select"],
@@ -44,6 +45,7 @@ def test_rules_page_renders_detection_rules(tmp_path, monkeypatch):
     assert "Detection Rules" in body
     assert "SQLI-001" in body
     assert "SQL Injection" in body
+    assert "regex" in body
     assert "union select" in body
     assert "Prepared Statement 사용 여부를 점검합니다." in body
 
