@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import json
 import re
 import sys
 from collections import Counter
@@ -455,6 +456,44 @@ def sanitize_markdown(value) -> str:
     return str(value).replace("|", "\\|").replace("\n", " ")
 
 
+def build_report_payload(
+    access_log: Path,
+    login_log: Path,
+    threshold: int,
+    access_analysis: dict,
+    login_analysis: dict,
+):
+    findings = access_analysis["findings"] + login_analysis["findings"]
+    risk_counts = get_risk_counts(findings)
+    suspicious_ips = sorted({item["ip"] for item in findings if item["ip"] != "-"})
+
+    return {
+        "analysis_info": {
+            "analysis_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "access_log": str(access_log),
+            "login_log": str(login_log),
+            "threshold": threshold,
+            "access_log_exists": access_analysis["access_log_exists"],
+            "login_log_exists": login_analysis["login_log_exists"],
+        },
+        "summary": {
+            "total_requests": access_analysis["total_requests"],
+            "total_login_events": login_analysis["total_login_events"],
+            "total_findings": len(findings),
+            "suspicious_ip_count": len(suspicious_ips),
+            "risk_counts": risk_counts,
+        },
+        "statistics": {
+            "suspicious_ips": suspicious_ips,
+            "request_count_by_ip": dict(access_analysis["request_count_by_ip"]),
+            "status_404_by_ip": dict(access_analysis["status_404_by_ip"]),
+            "login_fail_by_ip": dict(login_analysis["login_fail_by_ip"]),
+            "login_success_by_ip": dict(login_analysis["login_success_by_ip"]),
+        },
+        "findings": findings,
+    }
+
+
 def write_txt_report(
     result_file: Path,
     access_log: Path,
@@ -521,6 +560,27 @@ def write_txt_report(
         report.write("[최종 결과]\n")
         report.write(f"결과 파일 : {result_file}\n")
         report.write("==================================================\n")
+
+
+def write_json_report(
+    json_file: Path,
+    access_log: Path,
+    login_log: Path,
+    threshold: int,
+    access_analysis: dict,
+    login_analysis: dict,
+):
+    payload = build_report_payload(
+        access_log=access_log,
+        login_log=login_log,
+        threshold=threshold,
+        access_analysis=access_analysis,
+        login_analysis=login_analysis,
+    )
+
+    with json_file.open("w", encoding="utf-8") as report:
+        json.dump(payload, report, ensure_ascii=False, indent=2)
+        report.write("\n")
 
 
 def write_markdown_report(
@@ -693,6 +753,7 @@ def main():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     result_file = output_dir / f"web_attack_detection_result_{timestamp}.txt"
     markdown_file = output_dir / f"web_attack_detection_report_{timestamp}.md"
+    json_file = output_dir / f"web_attack_detection_report_{timestamp}.json"
 
     access_analysis = analyze_access_log(access_log, threshold)
     login_analysis = analyze_login_log(login_log, threshold)
@@ -715,8 +776,18 @@ def main():
         login_analysis=login_analysis,
     )
 
+    write_json_report(
+        json_file=json_file,
+        access_log=access_log,
+        login_log=login_log,
+        threshold=threshold,
+        access_analysis=access_analysis,
+        login_analysis=login_analysis,
+    )
+
     print(f"분석 완료. TXT 결과 파일: {result_file}")
     print(f"분석 완료. Markdown 리포트 파일: {markdown_file}")
+    print(f"분석 완료. JSON 리포트 파일: {json_file}")
 
 
 if __name__ == "__main__":
