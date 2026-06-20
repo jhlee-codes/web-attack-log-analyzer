@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Logs</title>
+    <style>
+        :root {
+            --bg: #f5f7fb;
+            --panel: #ffffff;
+            --text: #172033;
+            --muted: #667085;
+            --line: #d9e0ea;
+            --accent: #2563eb;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+        }
+
+        header {
+            border-bottom: 1px solid var(--line);
+            background: var(--panel);
+        }
+
+        .wrap {
+            width: min(820px, calc(100% - 32px));
+            margin: 0 auto;
+        }
+
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 68px;
+            gap: 16px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 22px;
+            font-weight: 700;
+        }
+
+        .meta {
+            color: var(--muted);
+            font-size: 13px;
+            text-align: right;
+        }
+
+        main {
+            padding: 24px 0 40px;
+        }
+
+        .notice {
+            border: 1px solid var(--line);
+            background: var(--panel);
+            padding: 16px;
+            border-radius: 8px;
+            color: var(--muted);
+            margin-bottom: 18px;
+        }
+
+        form {
+            display: grid;
+            gap: 16px;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 18px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .field label {
+            display: block;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        input,
+        select {
+            width: 100%;
+            min-height: 38px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: #ffffff;
+            color: var(--text);
+            padding: 8px 10px;
+        }
+
+        input[type="file"] {
+            padding: 7px 10px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 38px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--accent);
+            background: var(--accent);
+            color: #ffffff;
+            font-weight: 700;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .button.secondary {
+            border-color: var(--line);
+            background: #ffffff;
+            color: var(--text);
+        }
+
+        @media (max-width: 720px) {
+            .topbar {
+                align-items: flex-start;
+                flex-direction: column;
+                padding: 16px 0;
+            }
+
+            .meta {
+                text-align: left;
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            .actions {
+                flex-wrap: wrap;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="wrap topbar">
+            <h1>Upload Logs</h1>
+            <div class="meta">
+                <div>Access / Login log analysis</div>
+            </div>
+        </div>
+    </header>
+
+    <main class="wrap">
+        {% if upload_view.error %}
+            <div class="notice">{{ upload_view.error }}</div>
+        {% endif %}
+
+        <form method="POST" action="/upload" enctype="multipart/form-data">
+            <div class="grid">
+                <div class="field">
+                    <label for="access_log">Access Log</label>
+                    <input id="access_log" name="access_log" type="file" accept=".log,.txt">
+                </div>
+                <div class="field">
+                    <label for="login_log">Login Log</label>
+                    <input id="login_log" name="login_log" type="file" accept=".log,.txt">
+                </div>
+            </div>
+
+            <div class="grid">
+                <div class="field">
+                    <label for="access_format">Access Format</label>
+                    <select id="access_format" name="access_format">
+                        {% for access_format in upload_view.access_formats %}
+                            <option value="{{ access_format }}" {% if upload_view.selected_access_format == access_format %}selected{% endif %}>{{ access_format }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="threshold">Repeated Event Threshold</label>
+                    <input id="threshold" name="threshold" type="number" min="1" value="{{ upload_view.threshold }}">
+                </div>
+            </div>
+
+            <div class="actions">
+                <button class="button" type="submit">분석 실행</button>
+                <a class="button secondary" href="/dashboard">대시보드</a>
+                <a class="button secondary" href="/rules">탐지 룰</a>
+            </div>
+        </form>
+    </main>
+</body>
+</html>

@@ -1,12 +1,80 @@
 import json
 import sys
 from pathlib import Path
+from io import BytesIO
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from app import app as app_module
+
+
+def test_upload_page_renders_form(monkeypatch):
+    monkeypatch.setattr(app_module.access_logger, "info", lambda message: None)
+
+    client = app_module.app.test_client()
+    response = client.get("/upload")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Upload Logs" in body
+    assert 'name="access_log"' in body
+    assert 'name="login_log"' in body
+    assert 'name="threshold"' in body
+
+
+def test_upload_analyzes_logs_and_redirects_to_dashboard(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "RESULT_DIR", tmp_path)
+    monkeypatch.setattr(app_module.access_logger, "info", lambda message: None)
+    access_log = (
+        '2026-06-20 10:00:00 HTTP_REQUEST ip=10.0.0.1 method=GET '
+        'path="/login" query="id=1%27%20OR%20%271%27%3D%271" '
+        'status=200 user_agent="Mozilla/5.0"\n'
+    )
+
+    client = app_module.app.test_client()
+    response = client.post(
+        "/upload",
+        data={
+            "access_format": "custom",
+            "threshold": "5",
+            "access_log": (BytesIO(access_log.encode("utf-8")), "access.log"),
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 302
+    assert "/dashboard?report=web_attack_detection_report_" in response.headers["Location"]
+
+    json_report = next(tmp_path.glob("web_attack_detection_report_*.json"))
+    payload = json.loads(json_report.read_text(encoding="utf-8"))
+
+    assert payload["summary"]["total_findings"] == 1
+    assert payload["findings"][0]["rule_id"] == "SQLI-001"
+    assert next(tmp_path.glob("web_attack_detection_report_*.md")).is_file()
+    assert next(tmp_path.glob("web_attack_detection_result_*.txt")).is_file()
+    assert next(tmp_path.glob("web_attack_detection_findings_*.csv")).is_file()
+
+
+def test_upload_requires_at_least_one_log_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "RESULT_DIR", tmp_path)
+    monkeypatch.setattr(app_module.access_logger, "info", lambda message: None)
+
+    client = app_module.app.test_client()
+    response = client.post(
+        "/upload",
+        data={
+            "access_format": "custom",
+            "threshold": "5",
+        },
+        content_type="multipart/form-data",
+    )
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Access 로그 또는 Login 로그 중 하나 이상을 업로드해야 합니다." in body
+    assert not list(tmp_path.iterdir())
 
 
 def test_rules_page_renders_detection_rules(tmp_path, monkeypatch):

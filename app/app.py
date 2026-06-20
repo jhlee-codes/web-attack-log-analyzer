@@ -1,10 +1,14 @@
-from flask import Flask, abort, render_template, request, send_from_directory
+from flask import Flask, abort, redirect, render_template, request, send_from_directory, url_for
 from pathlib import Path
 from collections import Counter
+from datetime import datetime
+from tempfile import TemporaryDirectory
 from urllib.parse import urlencode
 import json
 import logging
 import re
+
+from analyzer import web_log_analyzer
 
 app = Flask(__name__)
 
@@ -110,6 +114,104 @@ def load_detection_rules_for_view() -> dict:
         "rules": rules,
         "error": "",
     }
+
+
+def has_uploaded_file(file_storage) -> bool:
+    return bool(file_storage and file_storage.filename)
+
+
+def parse_upload_threshold(value: str) -> int:
+    try:
+        threshold = int(value)
+    except (TypeError, ValueError) as error:
+        raise ValueError("반복 탐지 기준은 1 이상의 숫자여야 합니다.") from error
+
+    if threshold < 1:
+        raise ValueError("반복 탐지 기준은 1 이상의 숫자여야 합니다.")
+
+    return threshold
+
+
+def save_uploaded_file_or_empty(file_storage, destination: Path):
+    if has_uploaded_file(file_storage):
+        file_storage.save(destination)
+        return
+
+    destination.write_text("", encoding="utf-8")
+
+
+def analyze_uploaded_logs(access_file, login_file, access_format: str, threshold: int) -> str:
+    RESULT_DIR.mkdir(parents=True, exist_ok=True)
+
+    with TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+        access_log = temp_path / "uploaded_access.log"
+        login_log = temp_path / "uploaded_login.log"
+
+        save_uploaded_file_or_empty(access_file, access_log)
+        save_uploaded_file_or_empty(login_file, login_log)
+
+        rules = web_log_analyzer.load_detection_rules(RULES_FILE)
+        access_analysis = web_log_analyzer.analyze_access_log(
+            access_log=access_log,
+            threshold=threshold,
+            rules=rules,
+            access_format=access_format,
+        )
+        login_analysis = web_log_analyzer.analyze_login_log(login_log, threshold)
+        filters = {
+            "severities": set(),
+            "attack_types": set(),
+            "ips": set(),
+        }
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        result_file = RESULT_DIR / f"web_attack_detection_result_{timestamp}.txt"
+        markdown_file = RESULT_DIR / f"web_attack_detection_report_{timestamp}.md"
+        json_file = RESULT_DIR / f"web_attack_detection_report_{timestamp}.json"
+        csv_file = RESULT_DIR / f"web_attack_detection_findings_{timestamp}.csv"
+
+        web_log_analyzer.write_txt_report(
+            result_file=result_file,
+            access_log=access_log,
+            login_log=login_log,
+            rules_file=RULES_FILE,
+            access_format=access_format,
+            filters=filters,
+            threshold=threshold,
+            access_analysis=access_analysis,
+            login_analysis=login_analysis,
+        )
+        web_log_analyzer.write_markdown_report(
+            markdown_file=markdown_file,
+            access_log=access_log,
+            login_log=login_log,
+            rules_file=RULES_FILE,
+            rules=rules,
+            access_format=access_format,
+            filters=filters,
+            threshold=threshold,
+            access_analysis=access_analysis,
+            login_analysis=login_analysis,
+        )
+        web_log_analyzer.write_json_report(
+            json_file=json_file,
+            access_log=access_log,
+            login_log=login_log,
+            rules_file=RULES_FILE,
+            access_format=access_format,
+            filters=filters,
+            threshold=threshold,
+            access_analysis=access_analysis,
+            login_analysis=login_analysis,
+        )
+        web_log_analyzer.write_csv_report(
+            csv_file=csv_file,
+            access_analysis=access_analysis,
+            login_analysis=login_analysis,
+        )
+
+    return json_file.name
 
 
 def parse_dashboard_filters(args):
@@ -360,6 +462,39 @@ def dashboard():
 @app.route("/rules")
 def rules():
     return render_template("rules.html", rules_view=load_detection_rules_for_view())
+
+
+@app.route("/upload", methods=["GET", "POST"])
+def upload():
+    upload_view = {
+        "error": "",
+        "access_formats": sorted(web_log_analyzer.SUPPORTED_ACCESS_FORMATS),
+        "selected_access_format": "custom",
+        "threshold": web_log_analyzer.DEFAULT_THRESHOLD,
+    }
+
+    if request.method == "POST":
+        access_file = request.files.get("access_log")
+        login_file = request.files.get("login_log")
+        access_format = request.form.get("access_format", "custom").strip()
+        upload_view["selected_access_format"] = access_format
+        upload_view["threshold"] = request.form.get("threshold", str(web_log_analyzer.DEFAULT_THRESHOLD)).strip()
+
+        try:
+            if access_format not in web_log_analyzer.SUPPORTED_ACCESS_FORMATS:
+                raise ValueError("지원하지 않는 Access 로그 포맷입니다.")
+
+            if not has_uploaded_file(access_file) and not has_uploaded_file(login_file):
+                raise ValueError("Access 로그 또는 Login 로그 중 하나 이상을 업로드해야 합니다.")
+
+            threshold = parse_upload_threshold(upload_view["threshold"])
+            report_name = analyze_uploaded_logs(access_file, login_file, access_format, threshold)
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            upload_view["error"] = str(error)
+        else:
+            return redirect(url_for("dashboard", report=report_name))
+
+    return render_template("upload.html", upload_view=upload_view)
 
 
 @app.route("/reports/<path:filename>")
