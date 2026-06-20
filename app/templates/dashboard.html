@@ -107,6 +107,26 @@
             gap: 8px;
         }
 
+        .share-link {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: -6px 0 18px;
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .share-link a {
+            min-width: 0;
+            color: var(--accent);
+            overflow-wrap: anywhere;
+            text-decoration: none;
+        }
+
+        .share-link a:hover {
+            text-decoration: underline;
+        }
+
         .button {
             display: inline-flex;
             align-items: center;
@@ -338,6 +358,11 @@
             .actions {
                 flex-wrap: wrap;
             }
+
+            .share-link {
+                align-items: flex-start;
+                flex-direction: column;
+            }
         }
     </style>
 </head>
@@ -404,6 +429,11 @@
                 <a class="button secondary" href="/dashboard">초기화</a>
             </div>
         </form>
+
+        <div class="share-link">
+            <strong>현재 보기 링크</strong>
+            <a href="{{ dashboard.share_path }}">{{ dashboard.share_path }}</a>
+        </div>
 
         <div class="stats">
             <div class="stat">

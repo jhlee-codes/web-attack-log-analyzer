@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request
 from pathlib import Path
 from collections import Counter
+from urllib.parse import urlencode
 import json
 import logging
 
@@ -116,6 +117,22 @@ def build_filter_options(findings: list[dict]) -> dict:
     }
 
 
+def build_dashboard_share_path(filters: dict, report_file: Path | None = None) -> str:
+    query_params = {}
+
+    if report_file is not None:
+        query_params["report"] = report_file.name
+
+    for key in ("severity", "attack_type", "ip"):
+        if filters.get(key):
+            query_params[key] = filters[key]
+
+    if not query_params:
+        return "/dashboard"
+
+    return f"/dashboard?{urlencode(query_params)}"
+
+
 def load_dashboard_data(filters: dict | None = None, report_name: str = ""):
     filters = filters or {"severity": "", "attack_type": "", "ip": ""}
     report_files = get_json_reports()
@@ -143,6 +160,7 @@ def load_dashboard_data(filters: dict | None = None, report_name: str = ""):
             "top_request_ips": [],
             "filter_options": {"severities": [], "attack_types": [], "ips": []},
             "filters": filters,
+            "share_path": build_dashboard_share_path(filters),
             "timeline": [],
             "recent_findings": [],
         }
@@ -179,6 +197,7 @@ def load_dashboard_data(filters: dict | None = None, report_name: str = ""):
         "top_request_ips": build_count_chart(request_count_by_ip, limit=5),
         "filter_options": build_filter_options(all_findings),
         "filters": filters,
+        "share_path": build_dashboard_share_path(filters, report_file),
         "timeline": timeline,
         "recent_findings": findings[-20:][::-1],
     }

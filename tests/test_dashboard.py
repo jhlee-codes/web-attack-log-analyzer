@@ -283,3 +283,68 @@ def test_dashboard_filters_findings_by_query_parameters(tmp_path, monkeypatch):
     assert "2026-06-20 16:00:00" in body
     assert "2026-06-20 16:00:01" not in body
     assert '<option value="HIGH" selected>HIGH</option>' in body
+
+
+def test_dashboard_renders_share_link_for_current_view(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "RESULT_DIR", tmp_path)
+    monkeypatch.setattr(app_module.access_logger, "info", lambda message: None)
+    report_file = tmp_path / "web_attack_detection_report_20260620_160000.json"
+    report_file.write_text(
+        json.dumps(
+            {
+                "analysis_info": {
+                    "analysis_time": "2026-06-20 16:00:00",
+                },
+                "summary": {
+                    "total_requests": 10,
+                    "total_login_events": 4,
+                    "total_findings": 1,
+                    "suspicious_ip_count": 1,
+                    "risk_counts": {"HIGH": 1, "MEDIUM": 0, "LOW": 0},
+                },
+                "statistics": {
+                    "suspicious_ips": ["10.0.0.1"],
+                    "request_count_by_ip": {"10.0.0.1": 10},
+                },
+                "timeline": [
+                    {
+                        "timestamp": "2026-06-20 16:00:00",
+                        "rule_id": "SQLI-001",
+                        "severity": "HIGH",
+                        "attack_type": "SQL Injection",
+                        "ip": "10.0.0.1",
+                        "path": "/login",
+                        "evidence": "matched_pattern=' or",
+                    },
+                ],
+                "findings": [
+                    {
+                        "rule_id": "SQLI-001",
+                        "severity": "HIGH",
+                        "attack_type": "SQL Injection",
+                        "ip": "10.0.0.1",
+                        "path": "/login",
+                        "evidence": "matched_pattern=' or",
+                        "response": "입력값 검증을 확인합니다.",
+                    },
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    client = app_module.app.test_client()
+    response = client.get(
+        f"/dashboard?report={report_file.name}&severity=HIGH&attack_type=SQL%20Injection&ip=10.0.0.1"
+    )
+    body = response.get_data(as_text=True)
+
+    expected_path = (
+        f"/dashboard?report={report_file.name}&amp;severity=HIGH"
+        "&amp;attack_type=SQL+Injection&amp;ip=10.0.0.1"
+    )
+
+    assert response.status_code == 200
+    assert "현재 보기 링크" in body
+    assert expected_path in body

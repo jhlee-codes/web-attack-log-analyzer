@@ -178,6 +178,8 @@ http://127.0.0.1:5000/dashboard?severity=HIGH&ip=127.0.0.1
 http://127.0.0.1:5000/dashboard?report=web_attack_detection_report_20260620_160000.json
 ```
 
+필터와 리포트 선택 상태는 URL에 반영되므로, 대시보드의 현재 보기 링크를 공유하면 같은 분석 화면을 다시 확인할 수 있습니다.
+
 ## 탐지 룰
 
 패턴 기반 탐지 룰은 `analyzer/rules.json`에서 관리합니다. 룰 파일을 수정하면 분석기 코드를 바꾸지 않고도 탐지 패턴, 위험도, 신뢰도, 대응 문구를 조정할 수 있습니다.
