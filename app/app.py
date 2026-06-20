@@ -7,14 +7,16 @@ from urllib.parse import urlencode
 import json
 import logging
 import re
-
-from analyzer import web_log_analyzer
+import sys
 
 app = Flask(__name__)
 
 # 로그 저장 경로 설정
 BASE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BASE_DIR.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from analyzer import web_log_analyzer
 
 LOG_DIR = PROJECT_ROOT / "logs"
 LOG_DIR.mkdir(exist_ok=True)
